@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "newtype_gobject",
+    "newtype_gobject_derive",
+    "find_duplicates_gui",
+]

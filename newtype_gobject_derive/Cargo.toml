@@ -1,0 +1,12 @@
+[package]
+name = "newtype_gobject_derive"
+version = "0.1.0"
+authors = ["Andrey Kutejko <andy128k@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1"
+quote = "1"
