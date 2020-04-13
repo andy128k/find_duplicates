@@ -6,6 +6,7 @@ use crate::path_choose;
 use crate::user_interaction;
 use crate::utils::horizontal_expander;
 use crate::widgets::go_button::go_button;
+use crate::widgets::menu_builder::MenuBuilderExt;
 use gio::prelude::*;
 use glib::clone;
 use gtk::prelude::*;
@@ -61,39 +62,18 @@ fn all_buttons(builder: &mut AppWidgetsBuilder) -> gtk::Box {
         .build();
     row.pack_end(&save, false, false, 1);
 
-    let menu = gio::Menu::new();
-    menu.append_item(&gio::MenuItem::new(
-        Some("Select using wildcard"),
-        Some("win.select_wildcard"),
-    ));
-    menu.append_item(&gio::MenuItem::new(
-        Some("Unselect using wildcard"),
-        Some("win.unselect_wildcard"),
-    ));
-    menu.append_submenu(Some("Select within groups"), &{
-        let groups = gio::Menu::new();
-        groups.append_item(&gio::MenuItem::new(
-            Some("Select all but first"),
-            Some("win.select_but_first"),
-        ));
-        groups.append_item(&gio::MenuItem::new(
-            Some("Select all but newest"),
-            Some("win.select_but_newest"),
-        ));
-        groups.append_item(&gio::MenuItem::new(
-            Some("Select all but oldest"),
-            Some("win.select_but_oldest"),
-        ));
-        groups
-    });
-    menu.append_item(&gio::MenuItem::new(
-        Some("Toggle selection"),
-        Some("win.select_toggle"),
-    ));
-    menu.append_item(&gio::MenuItem::new(
-        Some("Unselect all"),
-        Some("win.unselect_all"),
-    ));
+    let menu = gio::Menu::new()
+        .item("Select using wildcard", "win.select_wildcard")
+        .item("Unselect using wildcard", "win.unselect_wildcard")
+        .submenu(
+            "Select within groups",
+            gio::Menu::new()
+                .item("Select all but first", "win.select_but_first")
+                .item("Select all but newest", "win.select_but_newest")
+                .item("Select all but oldest", "win.select_but_oldest"),
+        )
+        .item("Toggle selection", "win.select_toggle")
+        .item("Unselect all", "win.unselect_all");
 
     let select = gtk::MenuButtonBuilder::new()
         .label("Select")
@@ -136,18 +116,15 @@ fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
         .spacing(8)
         .build();
 
-    let menu = gio::Menu::new();
-    menu.append_item(&gio::MenuItem::new(Some("Open"), Some("win.open")));
-    menu.append_item(&gio::MenuItem::new(
-        Some("Open directory"),
-        Some("win.open_directory"),
-    ));
-    menu.append_item(&gio::MenuItem::new(Some("Copy"), Some("win.copy")));
-    menu.append_item(&gio::MenuItem::new(Some("Rename..."), Some("win.rename")));
-    menu.append_item(&gio::MenuItem::new(
-        Some("Select all in this directory"),
-        Some("win.select_from_same_folder"),
-    ));
+    let menu = gio::Menu::new()
+        .item("Open", "win.open")
+        .item("Open directory", "win.open_directory")
+        .item("Copy", "win.copy")
+        .item("Rename...", "win.rename")
+        .item(
+            "Select all in this directory",
+            "win.select_from_same_folder",
+        );
 
     let dups = duplicates_list::DuplicatesList::new(builder.duplicates.as_ref().unwrap());
     dups.set_popup(&menu.upcast());
