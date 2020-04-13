@@ -231,54 +231,7 @@ impl MainWindow {
         };
         Self::private_field().set(&window.0, private);
 
-        {
-            let private = window.get_private();
-            private.widgets.button_find.connect_clicked(
-                clone!(@weak window => move |_| window.fallible(window.on_find())),
-            );
-            private
-                .widgets
-                .button_delete
-                .connect_clicked(clone!(@weak window => move |_| window.on_delete_selected()));
-            private
-                .widgets
-                .button_save
-                .connect_clicked(clone!(@weak window => move |_| window.on_save_as().unwrap()));
-
-            window.create_action("open").connect_activate(
-                clone!(@weak window => move |_, _| window.fallible(window.on_open_file())),
-            );
-            window.create_action("open_directory").connect_activate(
-                clone!(@weak window => move |_, _| window.fallible(window.on_open_directory())),
-            );
-            window.create_action("copy").connect_activate(
-                clone!(@weak window => move |_, _| window.on_copy_to_clipboard()),
-            );
-            window
-                .create_action("rename")
-                .connect_activate(clone!(@weak window => move |_, _| { window.on_rename(); }));
-            window
-                .create_action("select_from_same_folder")
-                .connect_activate(
-                    clone!(@weak window => move |_, _| window.on_select_from_that_folder()),
-                );
-
-            window.create_action("select_wildcard").connect_activate(
-                clone!(@weak window => move |_, _| window.on_select_using_wildcard()),
-            );
-            window.create_action("unselect_wildcard").connect_activate(
-                clone!(@weak window => move |_, _| window.on_unselect_using_wildcard()),
-            );
-            window.create_action("select_but_first").connect_activate(clone!(@weak window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::First)));
-            window.create_action("select_but_newest").connect_activate(clone!(@weak window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Newest)));
-            window.create_action("select_but_oldest").connect_activate(clone!(@weak window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Oldest)));
-            window
-                .create_action("select_toggle")
-                .connect_activate(clone!(@weak window => move |_, _| window.on_toggle_selection()));
-            window
-                .create_action("unselect_all")
-                .connect_activate(clone!(@weak window => move |_, _| window.on_unselect_all()));
-        }
+        window.connect_signals();
 
         for ignore in DEFAULT_EXCLUDE_PATTERNS {
             window.add_excluded(&ignore);
@@ -293,6 +246,52 @@ impl MainWindow {
 
     fn get_private(&self) -> &MainWindowPrivate {
         Self::private_field().get(&self.0).unwrap()
+    }
+
+    fn connect_signals(&self) {
+        let private = self.get_private();
+        private.widgets.button_find.connect_clicked(
+            clone!(@weak self as window => move |_| window.fallible(window.on_find())),
+        );
+        private
+            .widgets
+            .button_delete
+            .connect_clicked(clone!(@weak self as window => move |_| window.on_delete_selected()));
+        private
+            .widgets
+            .button_save
+            .connect_clicked(clone!(@weak self as window => move |_| window.on_save_as().unwrap()));
+
+        self.create_action("open").connect_activate(
+            clone!(@weak self as window => move |_, _| window.fallible(window.on_open_file())),
+        );
+        self.create_action("open_directory").connect_activate(
+            clone!(@weak self as window => move |_, _| window.fallible(window.on_open_directory())),
+        );
+        self.create_action("copy").connect_activate(
+            clone!(@weak self as window => move |_, _| window.on_copy_to_clipboard()),
+        );
+        self.create_action("rename")
+            .connect_activate(clone!(@weak self as window => move |_, _| { window.on_rename(); }));
+        self.create_action("select_from_same_folder")
+            .connect_activate(
+                clone!(@weak self as window => move |_, _| window.on_select_from_that_folder()),
+            );
+
+        self.create_action("select_wildcard").connect_activate(
+            clone!(@weak self as window => move |_, _| window.on_select_using_wildcard()),
+        );
+        self.create_action("unselect_wildcard").connect_activate(
+            clone!(@weak self as window => move |_, _| window.on_unselect_using_wildcard()),
+        );
+        self.create_action("select_but_first").connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::First)));
+        self.create_action("select_but_newest").connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Newest)));
+        self.create_action("select_but_oldest").connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Oldest)));
+        self.create_action("select_toggle").connect_activate(
+            clone!(@weak self as window => move |_, _| window.on_toggle_selection()),
+        );
+        self.create_action("unselect_all")
+            .connect_activate(clone!(@weak self as window => move |_, _| window.on_unselect_all()));
     }
 
     fn create_action(&self, name: &str) -> gio::SimpleAction {
