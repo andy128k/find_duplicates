@@ -426,6 +426,7 @@ impl MainWindow {
 
         for path in to_save {
             file.write_all(path.to_str().unwrap().as_bytes())?;
+            file.write_all(b"\n")?;
         }
         Ok(())
     }
