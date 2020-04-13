@@ -9,6 +9,7 @@ mod path_choose;
 mod string_list;
 mod user_interaction;
 mod utils;
+mod widgets;
 
 use gio::prelude::*;
 

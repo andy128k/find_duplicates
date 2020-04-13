@@ -5,6 +5,7 @@ use crate::options;
 use crate::path_choose;
 use crate::user_interaction;
 use crate::utils::horizontal_expander;
+use crate::widgets::go_button::go_button;
 use gio::prelude::*;
 use glib::clone;
 use gtk::prelude::*;
@@ -120,9 +121,7 @@ fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
 
     b.attach(&horizontal_expander(), 0, 1, 1, 1);
 
-    let find = gtk::ButtonBuilder::new().label("Find").build();
-    find.get_style_context()
-        .add_class(&gtk::STYLE_CLASS_SUGGESTED_ACTION);
+    let find = go_button("Find");
     b.attach(&find, 1, 1, 1, 1);
 
     builder.options(options).button_find(find);
