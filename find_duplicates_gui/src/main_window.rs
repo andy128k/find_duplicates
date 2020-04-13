@@ -249,8 +249,9 @@ impl MainWindow {
         self.create_action("copy").connect_activate(
             clone!(@weak self as window => move |_, _| window.on_copy_to_clipboard()),
         );
-        self.create_action("rename")
-            .connect_activate(clone!(@weak self as window => move |_, _| { window.on_rename(); }));
+        self.create_action("rename").connect_activate(
+            clone!(@weak self as window => move |_, _| window.fallible(window.on_rename())),
+        );
         self.create_action("select_from_same_folder")
             .connect_activate(
                 clone!(@weak self as window => move |_, _| window.on_select_from_that_folder()),
@@ -481,39 +482,60 @@ impl MainWindow {
         }
     }
 
-    fn on_rename(&self) -> Option<()> {
+    fn get_path_and_name(&self, iter: &gtk::TreeIter) -> Result<(PathBuf, String), Box<dyn Error>> {
         let private = self.get_private();
+        let path = private
+            .widgets
+            .duplicates
+            .get_path(&iter)
+            .ok_or_else(|| "Cannot get path of the file")?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| "Cannot get base name of the file")?
+            .to_str()
+            .ok_or_else(|| "Cannot convert file name to string")?
+            .to_owned();
+        Ok((path, name))
+    }
 
-        let iter = self.get_selected_iter()?;
-        let path_name = private.widgets.duplicates.get_path(&iter)?;
-        let old_name = path_name.file_name()?.to_str()?;
+    fn on_rename(&self) -> Result<(), Box<dyn Error>> {
+        let iter = match self.get_selected_iter() {
+            Some(iter) => iter,
+            None => return Ok(()),
+        };
 
-        let new_name =
-            user_interaction::prompt(&self.0.clone().upcast(), "Rename file", "Name:", old_name)?;
+        let (old_path, old_name) = self.get_path_and_name(&iter)?;
 
-        if new_name == old_name {
-            return None;
-        }
+        let new_name = match user_interaction::prompt(
+            &self.0.clone().upcast(),
+            "Rename file",
+            "Name:",
+            &old_name,
+        ) {
+            Some(name) if name != old_name => name,
+            _ => return Ok(()),
+        };
 
         self.clear_errors();
 
-        let mut new_path = path_name.parent().unwrap().to_path_buf();
+        let mut new_path = old_path.parent().unwrap().to_path_buf();
         new_path.push(new_name);
 
         if new_path.exists() {
-            self.show_error(&format!(
+            return Err(format!(
                 "Error: Can't rename [{}] as [{}] exists",
                 old_name,
                 new_path.display()
-            ));
-        } else {
-            if let Err(error) = fs::rename(path_name, &new_path) {
-                self.show_error(&error.to_string());
-            } else {
-                private.widgets.duplicates.set_path(&iter, &new_path);
-            }
+            )
+            .into());
         }
-        Some(())
+
+        fs::rename(old_path, &new_path)?;
+
+        let private = self.get_private();
+        private.widgets.duplicates.set_path(&iter, &new_path);
+
+        Ok(())
     }
 
     fn on_unselect_using_wildcard(&self) {
