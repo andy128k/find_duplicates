@@ -44,13 +44,14 @@ pub enum GroupCleanOption {
     Oldest,
 }
 
-fn all_buttons(builder: &mut AppWidgetsBuilder) -> gtk::Box {
-    let row = gtk::BoxBuilder::new()
+fn all_buttons(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
+    let row = gtk::ButtonBoxBuilder::new()
         .homogeneous(false)
         .spacing(8)
         .margin_start(8)
         .margin_end(8)
         .orientation(gtk::Orientation::Horizontal)
+        .layout_style(gtk::ButtonBoxStyle::End)
         .build();
 
     let del = gtk::ButtonBuilder::new().label("Delete").build();
@@ -85,7 +86,7 @@ fn all_buttons(builder: &mut AppWidgetsBuilder) -> gtk::Box {
 
     builder.button_delete(del).button_save(save);
 
-    row
+    row.upcast()
 }
 
 fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
