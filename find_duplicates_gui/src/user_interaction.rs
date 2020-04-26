@@ -126,3 +126,41 @@ pub fn notify_info(parent: &gtk::Window, message: &str) {
 pub fn notify_error(parent: &gtk::Window, message: &str) {
     notify(gtk::MessageType::Error, parent, message)
 }
+
+pub fn progress(parent: &gtk::Window, title: &str) -> gtk::Dialog {
+    let dlg = gtk::DialogBuilder::new()
+        .title(title)
+        .transient_for(parent)
+        .type_(gtk::WindowType::Toplevel)
+        .type_hint(gdk::WindowTypeHint::Dialog)
+        .modal(true)
+        .window_position(gtk::WindowPosition::CenterOnParent)
+        .resizable(false)
+        .destroy_with_parent(false)
+        .decorated(true)
+        .gravity(gdk::Gravity::Center)
+        .focus_on_map(true)
+        .urgency_hint(false)
+        .use_header_bar(1)
+        .deletable(false)
+        .width_request(400)
+        .build();
+
+    let progress_bar = gtk::ProgressBarBuilder::new().margin(30).build();
+
+    dlg.get_content_area().add(&progress_bar);
+
+    let weak_progress_bar = progress_bar.downgrade();
+    gtk::timeout_add(100, move || {
+        if let Some(progress_bar) = weak_progress_bar.upgrade() {
+            progress_bar.pulse();
+            glib::Continue(true)
+        } else {
+            glib::Continue(false)
+        }
+    });
+
+    dlg.show_all();
+
+    dlg
+}

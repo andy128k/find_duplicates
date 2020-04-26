@@ -1,6 +1,6 @@
 use crate::duplicates_list;
 use crate::errors;
-use crate::find_duplicates::{duplication_status, find_duplicate_groups};
+use crate::find_duplicates::{duplication_status, find_duplicate_groups, DuplicatesGroup};
 use crate::options;
 use crate::path_choose;
 use crate::user_interaction;
@@ -10,13 +10,14 @@ use crate::widgets::menu_builder::MenuBuilderExt;
 use gio::prelude::*;
 use glib::clone;
 use gtk::prelude::*;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::env;
 use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 
 fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
     Command::new("xdg-open").arg(file).spawn()?;
@@ -173,6 +174,8 @@ fn create_app_window(
     MainWindow(window)
 }
 
+type FindResult = Result<Vec<DuplicatesGroup>, String>;
+
 #[derive(derive_builder::Builder)]
 struct AppWidgets {
     duplicates: duplicates_list::DuplicatesStore,
@@ -194,6 +197,9 @@ pub struct MainWindow(pub gtk::ApplicationWindow);
 pub struct MainWindowPrivate {
     confirm_delete: Cell<bool>,
     widgets: AppWidgets,
+
+    find_sender: glib::Sender<FindResult>,
+    progress: RefCell<Option<gtk::Dialog>>,
 }
 
 impl MainWindow {
@@ -203,13 +209,17 @@ impl MainWindow {
 
         let window = create_app_window(application, &mut widgets_builder);
 
+        let (find_sender, find_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+
         let private = MainWindowPrivate {
             confirm_delete: Cell::new(true),
             widgets: widgets_builder.build().unwrap(),
+            find_sender,
+            progress: RefCell::new(None),
         };
         Self::private_field().set(&window.0, private);
 
-        window.connect_signals();
+        window.connect_signals(find_receiver);
 
         for ignore in DEFAULT_EXCLUDE_PATTERNS {
             window.add_excluded(&ignore);
@@ -226,7 +236,7 @@ impl MainWindow {
         Self::private_field().get(&self.0).unwrap()
     }
 
-    fn connect_signals(&self) {
+    fn connect_signals(&self, find_receiver: glib::Receiver<FindResult>) {
         let private = self.get_private();
         private.widgets.button_find.connect_clicked(
             clone!(@weak self as window => move |_| window.fallible(window.on_find())),
@@ -271,6 +281,8 @@ impl MainWindow {
         );
         self.create_action("unselect_all")
             .connect_activate(clone!(@weak self as window => move |_, _| window.on_unselect_all()));
+
+        find_receiver.attach(None, clone!(@weak self as window =>  @default-return glib::Continue(false), move |msg| window.on_find_finished(msg)));
     }
 
     fn create_action(&self, name: &str) -> gio::SimpleAction {
@@ -327,30 +339,54 @@ impl MainWindow {
         self.set_status("");
         private.widgets.duplicates.clear();
 
+        let progress = user_interaction::progress(&self.0.clone().upcast(), "Searching...");
+        progress.show();
+        *private.progress.borrow_mut() = Some(progress);
         self.set_status("searching...");
-        let duplicates = find_duplicate_groups(&search_dirs, &excluded, min_size, recurse)?;
-        self.set_status("processing...");
 
-        for group in &duplicates {
-            private
-                .widgets
-                .duplicates
-                .append_group(group.files.len(), group.size());
-            for fi in &group.files {
-                private
-                    .widgets
-                    .duplicates
-                    .append_file(&fi.path, fi.modified, fi.size);
-            }
+        let sender = private.find_sender.clone();
+        thread::spawn(move || {
+            let duplicates = find_duplicate_groups(&search_dirs, &excluded, min_size, recurse);
+            let _ = sender.send(duplicates.map_err(|err| err.to_string()));
+        });
+        Ok(())
+    }
+
+    fn on_find_finished(&self, msg: FindResult) -> glib::Continue {
+        let private = self.get_private();
+
+        if let Some(progress) = private.progress.borrow_mut().take() {
+            progress.destroy();
         }
 
-        self.set_status("Done");
+        match msg {
+            Ok(duplicates) => {
+                self.set_status("processing...");
 
-        let status = duplication_status(&duplicates);
+                for group in &duplicates {
+                    private
+                        .widgets
+                        .duplicates
+                        .append_group(group.files.len(), group.size());
+                    for fi in &group.files {
+                        private
+                            .widgets
+                            .duplicates
+                            .append_file(&fi.path, fi.modified, fi.size);
+                    }
+                }
 
-        user_interaction::notify_info(&self.0.clone().upcast(), &status);
+                self.set_status("Done");
 
-        Ok(())
+                let status = duplication_status(&duplicates);
+
+                user_interaction::notify_info(&self.0.clone().upcast(), &status);
+            }
+            Err(error) => {
+                self.show_error(&error);
+            }
+        }
+        glib::Continue(true)
     }
 
     fn on_save_as(&self) -> Result<(), Box<dyn Error>> {
