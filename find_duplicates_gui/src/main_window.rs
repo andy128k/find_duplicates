@@ -20,6 +20,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
+const FIND: ActionName = action_name!(win, find);
+
 const SELECT_WILDCARD: ActionName = action_name!(win, select_wildcard);
 const UNSELECT_WILDCARD: ActionName = action_name!(win, unselect_wildcard);
 
@@ -35,6 +37,9 @@ const OPEN_DIRECTORY: ActionName = action_name!(win, open_directory);
 const COPY: ActionName = action_name!(win, copy);
 const RENAME: ActionName = action_name!(win, rename);
 const SELECT_FROM_SAME_FOLDER: ActionName = action_name!(win, select_from_same_folder);
+
+const DELETE: ActionName = action_name!(win, delete);
+const SAVE: ActionName = action_name!(win, save);
 
 fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
     Command::new("xdg-open").arg(file).spawn()?;
@@ -62,7 +67,7 @@ pub enum GroupCleanOption {
     Oldest,
 }
 
-fn all_buttons(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
+fn action_buttons() -> gtk::Widget {
     let row = gtk::ButtonBoxBuilder::new()
         .homogeneous(false)
         .spacing(8)
@@ -72,12 +77,16 @@ fn all_buttons(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
         .layout_style(gtk::ButtonBoxStyle::End)
         .build();
 
-    let del = gtk::ButtonBuilder::new().label("Delete").build();
+    let del = gtk::ButtonBuilder::new()
+        .label("Delete")
+        .action_name(DELETE.full())
+        .build();
     row.pack_end(&del, false, false, 1);
 
     let save = gtk::ButtonBuilder::new()
         .label("Save")
         .tooltip_text("Save (selected) list to file")
+        .action_name(SAVE.full())
         .build();
     row.pack_end(&save, false, false, 1);
 
@@ -102,8 +111,6 @@ fn all_buttons(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
         .build();
     row.pack_end(&select, false, false, 1);
 
-    builder.button_delete(del).button_save(save);
-
     row.upcast()
 }
 
@@ -121,9 +128,10 @@ fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
     b.attach(&horizontal_expander(), 0, 1, 1, 1);
 
     let find = go_button("Find");
+    find.set_action_name(Some(FIND.full()));
     b.attach(&find, 1, 1, 1, 1);
 
-    builder.options(options).button_find(find);
+    builder.options(options);
 
     b.upcast()
 }
@@ -146,7 +154,7 @@ fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
     dups.set_popup(&menu.upcast());
     b.pack_start(&dups.get_widget(), true, true, 0);
 
-    let all_buttons = all_buttons(builder);
+    let all_buttons = action_buttons();
     b.pack_start(&all_buttons, false, false, 0);
 
     let errors = errors::Errors::new();
@@ -195,10 +203,6 @@ struct AppWidgets {
     duplicates: duplicates_list::DuplicatesStore,
 
     options: options::Options,
-
-    button_find: gtk::Button,
-    button_delete: gtk::Button,
-    button_save: gtk::Button,
 
     view: duplicates_list::DuplicatesList,
     errors: errors::Errors,
@@ -251,19 +255,15 @@ impl MainWindow {
     }
 
     fn connect_signals(&self, find_receiver: glib::Receiver<FindResult>) {
-        let private = self.get_private();
-        private.widgets.button_find.connect_clicked(
-            clone!(@weak self as window => move |_| window.fallible(window.on_find())),
+        self.create_action(&FIND).connect_activate(
+            clone!(@weak self as window => move |_, _| window.fallible(window.on_find())),
         );
-        private
-            .widgets
-            .button_delete
-            .connect_clicked(clone!(@weak self as window => move |_| window.on_delete_selected()));
-        private
-            .widgets
-            .button_save
-            .connect_clicked(clone!(@weak self as window => move |_| window.on_save_as().unwrap()));
-
+        self.create_action(&DELETE).connect_activate(
+            clone!(@weak self as window => move |_, _| window.on_delete_selected()),
+        );
+        self.create_action(&SAVE).connect_activate(
+            clone!(@weak self as window => move |_, _| window.on_save_as().unwrap()),
+        );
         self.create_action(&OPEN).connect_activate(
             clone!(@weak self as window => move |_, _| window.fallible(window.on_open_file())),
         );
