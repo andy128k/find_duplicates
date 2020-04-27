@@ -175,6 +175,7 @@ fn create_app_window(
     let window = gtk::ApplicationWindowBuilder::new()
         .application(application)
         .type_(gtk::WindowType::Toplevel)
+        .window_position(gtk::WindowPosition::Center)
         .default_width(1200)
         .default_height(800)
         .resizable(true)
