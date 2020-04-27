@@ -291,11 +291,11 @@ impl MainWindow {
 
         self.create_action(&action::SELECT_WILDCARD)
             .connect_activate(
-                clone!(@weak self as window => move |_, _| window.on_select_using_wildcard()),
+                clone!(@weak self as window => move |_, _| window.fallible(window.on_select_using_wildcard(true))),
             );
         self.create_action(&action::UNSELECT_WILDCARD)
             .connect_activate(
-                clone!(@weak self as window => move |_, _| window.on_unselect_using_wildcard()),
+                clone!(@weak self as window => move |_, _| window.fallible(window.on_select_using_wildcard(false))),
             );
         self.create_action(&action::SELECT_ALL_BUT_FIRST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::First)));
         self.create_action(&action::SELECT_ALL_BUT_NEWEST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Newest)));
@@ -598,15 +598,7 @@ impl MainWindow {
         Ok(())
     }
 
-    fn on_unselect_using_wildcard(&self) {
-        self.fallible(self.select_using_wildcard(false));
-    }
-
-    fn on_select_using_wildcard(&self) {
-        self.fallible(self.select_using_wildcard(true));
-    }
-
-    fn select_using_wildcard(&self, select: bool) -> Result<(), Box<dyn Error>> {
+    fn on_select_using_wildcard(&self, select: bool) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
         if private.widgets.duplicates.is_empty() {
             return Ok(());
@@ -643,14 +635,14 @@ impl MainWindow {
 
     fn on_select_all_but_one_in_each_group(&self, which: GroupCleanOption) {
         fn find_row_to_unselect<'i>(
-            clist: &duplicates_list::DuplicatesStore,
+            model: &duplicates_list::DuplicatesStore,
             files: &'i [gtk::TreeIter],
             which: &GroupCleanOption,
         ) -> Option<&'i gtk::TreeIter> {
             match which {
                 GroupCleanOption::First => files.first(),
-                GroupCleanOption::Newest => files.iter().max_by_key(|iter| clist.modified(iter)),
-                GroupCleanOption::Oldest => files.iter().min_by_key(|iter| clist.modified(iter)),
+                GroupCleanOption::Newest => files.iter().max_by_key(|iter| model.modified(iter)),
+                GroupCleanOption::Oldest => files.iter().min_by_key(|iter| model.modified(iter)),
             }
         }
 
