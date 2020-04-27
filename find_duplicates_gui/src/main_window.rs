@@ -1,4 +1,4 @@
-use crate::action_name::*;
+use crate::action_name::ActionName;
 use crate::duplicates_list;
 use crate::errors;
 use crate::find_duplicates::{duplication_status, find_duplicate_groups, DuplicatesGroup};
@@ -20,26 +20,30 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
-const FIND: ActionName = action_name!(win, find);
+mod action {
+    use crate::action_name::*;
 
-const SELECT_WILDCARD: ActionName = action_name!(win, select_wildcard);
-const UNSELECT_WILDCARD: ActionName = action_name!(win, unselect_wildcard);
+    pub const FIND: ActionName = action_name!(win, find);
 
-const SELECT_ALL_BUT_FIRST: ActionName = action_name!(win, select_but_first);
-const SELECT_ALL_BUT_NEWEST: ActionName = action_name!(win, select_but_newest);
-const SELECT_ALL_BUT_OLDEST: ActionName = action_name!(win, select_but_oldest);
+    pub const SELECT_WILDCARD: ActionName = action_name!(win, select_wildcard);
+    pub const UNSELECT_WILDCARD: ActionName = action_name!(win, unselect_wildcard);
 
-const SELECT_TOGGLE: ActionName = action_name!(win, select_toggle);
-const UNSELECT_ALL: ActionName = action_name!(win, unselect_all);
+    pub const SELECT_ALL_BUT_FIRST: ActionName = action_name!(win, select_but_first);
+    pub const SELECT_ALL_BUT_NEWEST: ActionName = action_name!(win, select_but_newest);
+    pub const SELECT_ALL_BUT_OLDEST: ActionName = action_name!(win, select_but_oldest);
 
-const OPEN: ActionName = action_name!(win, open);
-const OPEN_DIRECTORY: ActionName = action_name!(win, open_directory);
-const COPY: ActionName = action_name!(win, copy);
-const RENAME: ActionName = action_name!(win, rename);
-const SELECT_FROM_SAME_FOLDER: ActionName = action_name!(win, select_from_same_folder);
+    pub const SELECT_TOGGLE: ActionName = action_name!(win, select_toggle);
+    pub const UNSELECT_ALL: ActionName = action_name!(win, unselect_all);
 
-const DELETE: ActionName = action_name!(win, delete);
-const SAVE: ActionName = action_name!(win, save);
+    pub const OPEN: ActionName = action_name!(win, open);
+    pub const OPEN_DIRECTORY: ActionName = action_name!(win, open_directory);
+    pub const COPY: ActionName = action_name!(win, copy);
+    pub const RENAME: ActionName = action_name!(win, rename);
+    pub const SELECT_FROM_SAME_FOLDER: ActionName = action_name!(win, select_from_same_folder);
+
+    pub const DELETE: ActionName = action_name!(win, delete);
+    pub const SAVE: ActionName = action_name!(win, save);
+}
 
 fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
     Command::new("xdg-open").arg(file).spawn()?;
@@ -79,29 +83,29 @@ fn action_buttons() -> gtk::Widget {
 
     let del = gtk::ButtonBuilder::new()
         .label("Delete")
-        .action_name(DELETE.full())
+        .action_name(action::DELETE.full())
         .build();
     row.pack_end(&del, false, false, 1);
 
     let save = gtk::ButtonBuilder::new()
         .label("Save")
         .tooltip_text("Save (selected) list to file")
-        .action_name(SAVE.full())
+        .action_name(action::SAVE.full())
         .build();
     row.pack_end(&save, false, false, 1);
 
     let menu = gio::Menu::new()
-        .item("Select using wildcard", &SELECT_WILDCARD)
-        .item("Unselect using wildcard", &UNSELECT_WILDCARD)
+        .item("Select using wildcard", &action::SELECT_WILDCARD)
+        .item("Unselect using wildcard", &action::UNSELECT_WILDCARD)
         .submenu(
             "Select within groups",
             gio::Menu::new()
-                .item("Select all but first", &SELECT_ALL_BUT_FIRST)
-                .item("Select all but newest", &SELECT_ALL_BUT_NEWEST)
-                .item("Select all but oldest", &SELECT_ALL_BUT_OLDEST),
+                .item("Select all but first", &action::SELECT_ALL_BUT_FIRST)
+                .item("Select all but newest", &action::SELECT_ALL_BUT_NEWEST)
+                .item("Select all but oldest", &action::SELECT_ALL_BUT_OLDEST),
         )
-        .item("Toggle selection", &SELECT_TOGGLE)
-        .item("Unselect all", &UNSELECT_ALL);
+        .item("Toggle selection", &action::SELECT_TOGGLE)
+        .item("Unselect all", &action::UNSELECT_ALL);
 
     let select = gtk::MenuButtonBuilder::new()
         .label("Select")
@@ -128,7 +132,7 @@ fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
     b.attach(&horizontal_expander(), 0, 1, 1, 1);
 
     let find = go_button("Find");
-    find.set_action_name(Some(FIND.full()));
+    find.set_action_name(Some(action::FIND.full()));
     b.attach(&find, 1, 1, 1, 1);
 
     builder.options(options);
@@ -144,11 +148,14 @@ fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
         .build();
 
     let menu = gio::Menu::new()
-        .item("Open", &OPEN)
-        .item("Open directory", &OPEN_DIRECTORY)
-        .item("Copy", &COPY)
-        .item("Rename...", &RENAME)
-        .item("Select all in this directory", &SELECT_FROM_SAME_FOLDER);
+        .item("Open", &action::OPEN)
+        .item("Open directory", &action::OPEN_DIRECTORY)
+        .item("Copy", &action::COPY)
+        .item("Rename...", &action::RENAME)
+        .item(
+            "Select all in this directory",
+            &action::SELECT_FROM_SAME_FOLDER,
+        );
 
     let dups = duplicates_list::DuplicatesList::new(builder.duplicates.as_ref().unwrap());
     dups.set_popup(&menu.upcast());
@@ -256,45 +263,47 @@ impl MainWindow {
     }
 
     fn connect_signals(&self, find_receiver: glib::Receiver<FindResult>) {
-        self.create_action(&FIND).connect_activate(
+        self.create_action(&action::FIND).connect_activate(
             clone!(@weak self as window => move |_, _| window.fallible(window.on_find())),
         );
-        self.create_action(&DELETE).connect_activate(
+        self.create_action(&action::DELETE).connect_activate(
             clone!(@weak self as window => move |_, _| window.on_delete_selected()),
         );
-        self.create_action(&SAVE).connect_activate(
+        self.create_action(&action::SAVE).connect_activate(
             clone!(@weak self as window => move |_, _| window.on_save_as().unwrap()),
         );
-        self.create_action(&OPEN).connect_activate(
+        self.create_action(&action::OPEN).connect_activate(
             clone!(@weak self as window => move |_, _| window.fallible(window.on_open_file())),
         );
-        self.create_action(&OPEN_DIRECTORY).connect_activate(
+        self.create_action(&action::OPEN_DIRECTORY).connect_activate(
             clone!(@weak self as window => move |_, _| window.fallible(window.on_open_directory())),
         );
-        self.create_action(&COPY).connect_activate(
+        self.create_action(&action::COPY).connect_activate(
             clone!(@weak self as window => move |_, _| window.on_copy_to_clipboard()),
         );
-        self.create_action(&RENAME).connect_activate(
+        self.create_action(&action::RENAME).connect_activate(
             clone!(@weak self as window => move |_, _| window.fallible(window.on_rename())),
         );
-        self.create_action(&SELECT_FROM_SAME_FOLDER)
+        self.create_action(&action::SELECT_FROM_SAME_FOLDER)
             .connect_activate(
                 clone!(@weak self as window => move |_, _| window.on_select_from_that_folder()),
             );
 
-        self.create_action(&SELECT_WILDCARD).connect_activate(
-            clone!(@weak self as window => move |_, _| window.on_select_using_wildcard()),
-        );
-        self.create_action(&UNSELECT_WILDCARD).connect_activate(
-            clone!(@weak self as window => move |_, _| window.on_unselect_using_wildcard()),
-        );
-        self.create_action(&SELECT_ALL_BUT_FIRST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::First)));
-        self.create_action(&SELECT_ALL_BUT_NEWEST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Newest)));
-        self.create_action(&SELECT_ALL_BUT_OLDEST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Oldest)));
-        self.create_action(&SELECT_TOGGLE).connect_activate(
+        self.create_action(&action::SELECT_WILDCARD)
+            .connect_activate(
+                clone!(@weak self as window => move |_, _| window.on_select_using_wildcard()),
+            );
+        self.create_action(&action::UNSELECT_WILDCARD)
+            .connect_activate(
+                clone!(@weak self as window => move |_, _| window.on_unselect_using_wildcard()),
+            );
+        self.create_action(&action::SELECT_ALL_BUT_FIRST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::First)));
+        self.create_action(&action::SELECT_ALL_BUT_NEWEST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Newest)));
+        self.create_action(&action::SELECT_ALL_BUT_OLDEST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Oldest)));
+        self.create_action(&action::SELECT_TOGGLE).connect_activate(
             clone!(@weak self as window => move |_, _| window.on_toggle_selection()),
         );
-        self.create_action(&UNSELECT_ALL)
+        self.create_action(&action::UNSELECT_ALL)
             .connect_activate(clone!(@weak self as window => move |_, _| window.on_unselect_all()));
 
         find_receiver.attach(None, clone!(@weak self as window =>  @default-return glib::Continue(false), move |msg| window.on_find_finished(msg)));
