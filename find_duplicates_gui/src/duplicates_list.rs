@@ -369,8 +369,7 @@ impl DuplicatesList {
                         view.set_cursor(&path, None::<&gtk::TreeViewColumn>, false);
                     }
 
-                    let base_event: &gdk::Event = event;
-                    popup.popup_at_pointer(Some(base_event));
+                    popup.popup_at_pointer(Some(event));
 
                     Inhibit(true)
                 } else {
