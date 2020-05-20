@@ -1,35 +1,66 @@
-use glib::glib_sys::gpointer;
-use glib::gobject_sys::{g_object_get_data, g_object_set_data_full};
-use glib::{translate::ToGlibPtr, Object};
-use std::ffi::CString;
+use glib::glib_sys;
+use glib::gobject_sys;
+use glib::{
+    translate::{ToGlib, ToGlibPtr},
+    ObjectExt, Quark,
+};
 
-extern "C" fn drop_value<T>(ptr: gpointer) {
-    if ptr.is_null() {
-        return;
+pub trait ObjectDataExt {
+    unsafe fn set_qdata<QD: 'static>(&self, key: Quark, value: QD);
+    unsafe fn get_qdata<QD: 'static>(&self, key: Quark) -> Option<&QD>;
+    unsafe fn steal_qdata<QD: 'static>(&self, key: Quark) -> Option<QD>;
+
+    unsafe fn set_data<QD: 'static>(&self, key: &str, value: QD) {
+        self.set_qdata::<QD>(Quark::from_string(key), value)
     }
-    let value: Box<T> = unsafe { Box::from_raw(ptr as *mut T) };
-    std::mem::drop(value)
+
+    unsafe fn get_data<QD: 'static>(&self, key: &str) -> Option<&QD> {
+        self.get_qdata::<QD>(Quark::from_string(key))
+    }
+
+    unsafe fn steal_data<QD: 'static>(&self, key: &str) -> Option<QD> {
+        self.steal_qdata::<QD>(Quark::from_string(key))
+    }
 }
 
-pub fn object_set_data<T>(obj: &Object, key: &str, value: Box<T>) {
-    let ckey = CString::new(key).unwrap();
-    let ptr: gpointer = Box::leak(value) as *mut T as gpointer;
-    unsafe {
-        g_object_set_data_full(
-            obj.to_glib_none().0,
-            ckey.as_ptr(),
+impl<O> ObjectDataExt for O
+where
+    O: ObjectExt,
+{
+    unsafe fn set_qdata<QD: 'static>(&self, key: Quark, value: QD) {
+        unsafe extern "C" fn drop_value<QD>(ptr: glib_sys::gpointer) {
+            debug_assert!(!ptr.is_null());
+            let value: Box<QD> = Box::from_raw(ptr as *mut QD);
+            drop(value)
+        }
+
+        let ptr = Box::into_raw(Box::new(value)) as glib_sys::gpointer;
+        gobject_sys::g_object_set_qdata_full(
+            self.as_object_ref().to_glib_none().0,
+            key.to_glib(),
             ptr,
-            Some(drop_value::<T>),
+            Some(drop_value::<QD>),
         );
     }
-}
 
-pub fn object_get_data<'o, T>(obj: &'o Object, key: &str) -> Option<&'o T> {
-    let ckey = CString::new(key).ok()?;
-    let ptr = unsafe { g_object_get_data(obj.to_glib_none().0, ckey.as_ptr()) };
-    if ptr.is_null() {
-        return None;
+    unsafe fn get_qdata<QD: 'static>(&self, key: Quark) -> Option<&QD> {
+        let ptr =
+            gobject_sys::g_object_get_qdata(self.as_object_ref().to_glib_none().0, key.to_glib());
+        if ptr.is_null() {
+            None
+        } else {
+            Some(&*(ptr as *const QD))
+        }
     }
-    let value: &T = unsafe { &*(ptr as *const T) };
-    Some(value)
+
+    unsafe fn steal_qdata<QD: 'static>(&self, key: Quark) -> Option<QD> {
+        let ptr =
+            gobject_sys::g_object_steal_qdata(self.as_object_ref().to_glib_none().0, key.to_glib());
+        if ptr.is_null() {
+            None
+        } else {
+            let value: Box<QD> = Box::from_raw(ptr as *mut QD);
+            Some(*value)
+        }
+    }
 }

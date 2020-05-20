@@ -11,6 +11,7 @@ use crate::widgets::menu_builder::MenuBuilderExt;
 use gio::prelude::*;
 use glib::clone;
 use gtk::prelude::*;
+use newtype_gobject::object_data::ObjectDataExt;
 use std::cell::{Cell, RefCell};
 use std::env;
 use std::error::Error;
@@ -243,7 +244,9 @@ impl MainWindow {
             find_sender,
             progress: RefCell::new(None),
         };
-        Self::private_field().set(&window.0, private);
+        unsafe {
+            window.0.set_data::<MainWindowPrivate>("private", private);
+        }
 
         window.connect_signals(find_receiver);
 
@@ -254,12 +257,8 @@ impl MainWindow {
         window
     }
 
-    fn private_field() -> newtype_gobject::DynamicProperty<MainWindowPrivate> {
-        newtype_gobject::DynamicProperty::new("private")
-    }
-
     fn get_private(&self) -> &MainWindowPrivate {
-        Self::private_field().get(&self.0).unwrap()
+        unsafe { self.0.get_data::<MainWindowPrivate>("private").unwrap() }
     }
 
     fn connect_signals(&self, find_receiver: glib::Receiver<FindResult>) {
