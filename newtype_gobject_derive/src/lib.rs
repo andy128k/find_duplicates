@@ -1,7 +1,7 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, format_ident};
 use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, FieldsUnnamed};
 
 #[proc_macro_derive(NewTypeGObject)]
@@ -20,18 +20,24 @@ pub fn newtype_gobject(input: TokenStream) -> TokenStream {
         }
     };
 
+    let weak_ref = format_ident!("{}WeakRef", newtype);
+
     let expanded = quote! {
-        impl std::convert::From<#wrapped_type> for #newtype {
-            fn from(object: #wrapped_type) -> Self {
-                Self(object)
+        pub struct #weak_ref(glib::object::WeakRef<#wrapped_type>);
+
+        impl glib::clone::Downgrade for #newtype {
+            type Weak = #weak_ref;
+
+            fn downgrade(&self) -> Self::Weak {
+                #weak_ref(glib::clone::Downgrade::downgrade(&self.0))
             }
         }
 
-        impl glib::clone::Downgrade for #newtype {
-            type Weak = newtype_gobject::NewTypeWeakRef<#newtype, #wrapped_type>;
+        impl glib::clone::Upgrade for #weak_ref {
+            type Strong = #newtype;
 
-            fn downgrade(&self) -> Self::Weak {
-                Self::Weak::from_inner(glib::clone::Downgrade::downgrade(&self.0))
+            fn upgrade(&self) -> Option<Self::Strong> {
+                glib::clone::Upgrade::upgrade(&self.0).map(|upgraded_inner| #newtype(upgraded_inner))
             }
         }
     };
