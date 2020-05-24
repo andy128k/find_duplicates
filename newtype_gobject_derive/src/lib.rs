@@ -1,7 +1,7 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::{quote, format_ident};
+use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, FieldsUnnamed};
 
 #[proc_macro_derive(NewTypeGObject)]
@@ -14,9 +14,9 @@ pub fn newtype_gobject(input: TokenStream) -> TokenStream {
         Data::Struct(DataStruct {
             fields: Fields::Unnamed(FieldsUnnamed { ref unnamed, .. }),
             ..
-        }) if unnamed.len() == 1 => &unnamed.first().unwrap().ty,
+        }) if unnamed.len() == 1 => &unnamed[0].ty,
         _ => {
-            panic!("#[derive(NewTypeGObject)] is only defined for newtype structs.");
+            panic!("#[derive(NewTypeGObject)] is only defined for newtype structs (tuple struct with a single element).");
         }
     };
 
