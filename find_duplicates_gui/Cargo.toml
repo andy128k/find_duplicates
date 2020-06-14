@@ -14,8 +14,8 @@ derive_builder = "0.9.0"
 glob = "0.3.0"
 chrono = "0.4"
 
-sha2 = "0.8"
-generic-array = "0.12"
+sha2 = "0.9"
+generic-array = "0.14"
 lazy_static = "1"
 
 newtype_gobject = { path = "../newtype_gobject" }

@@ -91,7 +91,7 @@ fn find_files_in_dirs(
 fn get_file_hash(fi: &FileInfo) -> io::Result<GenericArray<u8, <Sha256 as Digest>::OutputSize>> {
     lazy_static! {
         static ref EMPTY_HASH: GenericArray<u8, <Sha256 as Digest>::OutputSize> =
-            { Sha256::new().result() };
+            Sha256::new().finalize();
     }
 
     if fi.size > 0 {
@@ -99,7 +99,7 @@ fn get_file_hash(fi: &FileInfo) -> io::Result<GenericArray<u8, <Sha256 as Digest
         let file = std::fs::File::open(&fi.path)?;
         let mut reader = io::BufReader::new(file);
         io::copy(&mut reader, &mut hasher)?;
-        let digest = hasher.result();
+        let digest = hasher.finalize();
         Ok(digest)
     } else {
         Ok(*EMPTY_HASH)
