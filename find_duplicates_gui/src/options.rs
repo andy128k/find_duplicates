@@ -1,3 +1,4 @@
+use crate::exclusion::Exclusion;
 use crate::path_choose::select_dir;
 use crate::string_list::StringList;
 use crate::user_interaction::prompt;
@@ -33,7 +34,7 @@ fn form_label(label: &str) -> gtk::Label {
 pub struct Options {
     container: gtk::Grid,
     directories: StringList<Directory>,
-    excluded: StringList<String>,
+    excluded: StringList<Exclusion>,
     recurse: gtk::CheckButton,
     min_size: gtk::Entry,
 }
@@ -74,27 +75,27 @@ fn add_directory_button(string_list: &StringList<Directory>) -> gtk::Button {
     button
 }
 
-fn add_excluded_directory_button(string_list: &StringList<String>) -> gtk::Button {
+fn add_excluded_directory_button(string_list: &StringList<Exclusion>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Add directory")
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
         if let Some(new_value) = pick_directory(button) {
-            string_list.append(new_value.display().to_string());
+            string_list.append(Exclusion::Directory(new_value));
         }
     }));
     button
 }
 
-fn add_pattern_button(string_list: &StringList<String>) -> gtk::Button {
+fn add_exclusion_pattern_button(string_list: &StringList<Exclusion>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Add pattern")
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
         if let Some(new_value) = pick_pattern(button) {
-            string_list.append(new_value);
+            string_list.append(Exclusion::Pattern(new_value));
         }
     }));
     button
@@ -174,7 +175,7 @@ impl Options {
 
         let excluded_buttons = button_column(&[
             add_excluded_directory_button(&excluded),
-            add_pattern_button(&excluded),
+            add_exclusion_pattern_button(&excluded),
             remove_selection_button(&excluded),
             clear_button(&excluded),
         ]);
@@ -218,15 +219,15 @@ impl Options {
         self.directories.append(Directory(value.to_owned()))
     }
 
-    pub fn add_excluded(&self, value: &str) {
-        self.excluded.append(value.to_string())
+    pub fn add_excluded(&self, value: Exclusion) {
+        self.excluded.append(value)
     }
 
     pub fn get_directories(&self) -> Vec<PathBuf> {
         self.directories.to_vec().into_iter().map(|d| d.0).collect()
     }
 
-    pub fn get_excluded(&self) -> Vec<String> {
+    pub fn get_excluded(&self) -> Vec<Exclusion> {
         self.excluded.to_vec()
     }
 

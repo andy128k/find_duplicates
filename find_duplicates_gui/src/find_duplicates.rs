@@ -1,3 +1,4 @@
+use crate::exclusion::Exclusion;
 use crate::format_number::human_num_decimal;
 use generic_array::GenericArray;
 use lazy_static::lazy_static;
@@ -185,15 +186,26 @@ impl DuplicatesGroup {
     }
 }
 
+fn exclusion_to_pattern(exclusion: &Exclusion) -> Result<glob::Pattern, Box<dyn Error>> {
+    let pattern = match exclusion {
+        Exclusion::Directory(dir) => glob::Pattern::new(
+            dir.to_str()
+                .ok_or_else(|| format!("Cannot create glob pattern from {}.", dir.display()))?,
+        )?,
+        Exclusion::Pattern(pattern) => glob::Pattern::new(pattern)?,
+    };
+    Ok(pattern)
+}
+
 pub fn find_duplicate_groups(
     paths: &[PathBuf],
-    exclude: &[String],
+    exclude: &[Exclusion],
     min_size: u64,
     recurse: bool,
 ) -> Result<Vec<DuplicatesGroup>, Box<dyn Error>> {
     let exclude: Vec<glob::Pattern> = exclude
         .iter()
-        .map(|p| glob::Pattern::new(&p))
+        .map(exclusion_to_pattern)
         .collect::<Result<_, _>>()?;
 
     let duplicates1 = find_duplicates(&paths, &exclude, min_size, recurse)?;

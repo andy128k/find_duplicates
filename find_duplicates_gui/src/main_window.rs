@@ -1,6 +1,7 @@
 use crate::action_name::ActionName;
 use crate::duplicates_list;
 use crate::errors;
+use crate::exclusion::{Exclusion, DEFAULT_EXCLUDE_PATTERNS};
 use crate::find_duplicates::{duplication_status, find_duplicate_groups, DuplicatesGroup};
 use crate::options;
 use crate::path_choose;
@@ -50,21 +51,6 @@ fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
     Command::new("xdg-open").arg(file).spawn()?;
     Ok(())
 }
-
-const DEFAULT_EXCLUDE_PATTERNS: &[&str] = &[
-    "/lost+found",
-    "/dev",
-    "/proc",
-    "/sys",
-    "/tmp",
-    "*/.svn",
-    "*/CVS",
-    "*/.git",
-    "*/.hg",
-    "*/.bzr",
-    "*/node_modules",
-    "*/target",
-];
 
 pub enum GroupCleanOption {
     First,
@@ -250,8 +236,8 @@ impl MainWindow {
 
         window.connect_signals(find_receiver);
 
-        for ignore in DEFAULT_EXCLUDE_PATTERNS {
-            window.add_excluded(&ignore);
+        for ignore in DEFAULT_EXCLUDE_PATTERNS.iter() {
+            window.add_excluded(ignore.clone());
         }
 
         window
@@ -325,7 +311,7 @@ impl MainWindow {
         private.widgets.status.push(0, message);
     }
 
-    fn add_excluded(&self, excluded: &str) {
+    fn add_excluded(&self, excluded: Exclusion) {
         let private = self.get_private();
         private.widgets.options.add_excluded(excluded);
     }

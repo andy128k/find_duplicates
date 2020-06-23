@@ -2,6 +2,7 @@ mod action_name;
 mod application;
 mod duplicates_list;
 mod errors;
+mod exclusion;
 mod find_duplicates;
 mod format_number;
 mod main_window;
