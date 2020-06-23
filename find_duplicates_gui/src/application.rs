@@ -17,7 +17,7 @@ pub fn create_application() -> gtk::Application {
     app.connect_activate(|app| {
         let app_window = MainWindow::new(app);
         if let Ok(directory) = std::env::current_dir() {
-            app_window.add_directory(&directory.to_string_lossy());
+            app_window.add_directory(&directory);
         }
         app_window.0.show_all();
     });

@@ -4,6 +4,18 @@ use crate::user_interaction::prompt;
 use crate::utils::horizontal_expander;
 use glib::{clone, IsA};
 use gtk::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::string::ToString;
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Directory(PathBuf);
+
+impl ToString for Directory {
+    fn to_string(&self) -> String {
+        self.0.display().to_string()
+    }
+}
 
 fn form_label(label: &str) -> gtk::Label {
     gtk::LabelBuilder::new()
@@ -20,7 +32,7 @@ fn form_label(label: &str) -> gtk::Label {
 #[derive(Clone)]
 pub struct Options {
     container: gtk::Grid,
-    directories: StringList<String>,
+    directories: StringList<Directory>,
     excluded: StringList<String>,
     recurse: gtk::CheckButton,
     min_size: gtk::Entry,
@@ -32,12 +44,11 @@ fn get_window(widget: &impl IsA<gtk::Widget>) -> Option<gtk::Window> {
         .and_then(|w| w.downcast::<gtk::Window>().ok())
 }
 
-fn pick_directory(widget: &impl IsA<gtk::Widget>) -> Option<String> {
+fn pick_directory(widget: &impl IsA<gtk::Widget>) -> Option<PathBuf> {
     let window = get_window(widget)?;
     let pwd = std::env::current_dir().ok()?;
     let path = select_dir(&window, &pwd)?;
-    let path_str = path.to_str()?;
-    Some(path_str.to_owned())
+    Some(path)
 }
 
 fn pick_pattern(widget: &impl IsA<gtk::Widget>) -> Option<String> {
@@ -50,14 +61,27 @@ fn pick_pattern(widget: &impl IsA<gtk::Widget>) -> Option<String> {
     }
 }
 
-fn add_directory_button(string_list: &StringList<String>) -> gtk::Button {
+fn add_directory_button(string_list: &StringList<Directory>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Add directory")
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
         if let Some(new_value) = pick_directory(button) {
-            string_list.append(new_value);
+            string_list.append(Directory(new_value));
+        }
+    }));
+    button
+}
+
+fn add_excluded_directory_button(string_list: &StringList<String>) -> gtk::Button {
+    let button = gtk::ButtonBuilder::new()
+        .label("Add directory")
+        .hexpand(false)
+        .build();
+    button.connect_clicked(clone!(@weak string_list => move |button| {
+        if let Some(new_value) = pick_directory(button) {
+            string_list.append(new_value.display().to_string());
         }
     }));
     button
@@ -76,7 +100,7 @@ fn add_pattern_button(string_list: &StringList<String>) -> gtk::Button {
     button
 }
 
-fn remove_selection_button(string_list: &StringList<String>) -> gtk::Button {
+fn remove_selection_button<T: 'static>(string_list: &StringList<T>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Remove")
         .hexpand(false)
@@ -87,7 +111,7 @@ fn remove_selection_button(string_list: &StringList<String>) -> gtk::Button {
     button
 }
 
-fn clear_button(string_list: &StringList<String>) -> gtk::Button {
+fn clear_button<T: 'static>(string_list: &StringList<T>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Clear")
         .hexpand(false)
@@ -149,7 +173,7 @@ impl Options {
         container.attach(&excluded.get_widget(), 0, 3, 2, 1);
 
         let excluded_buttons = button_column(&[
-            add_directory_button(&excluded),
+            add_excluded_directory_button(&excluded),
             add_pattern_button(&excluded),
             remove_selection_button(&excluded),
             clear_button(&excluded),
@@ -190,16 +214,16 @@ impl Options {
         self.container.clone().upcast()
     }
 
-    pub fn add_directory(&self, value: &str) {
-        self.directories.append(value.to_string())
+    pub fn add_directory(&self, value: &Path) {
+        self.directories.append(Directory(value.to_owned()))
     }
 
     pub fn add_excluded(&self, value: &str) {
         self.excluded.append(value.to_string())
     }
 
-    pub fn get_directories(&self) -> Vec<String> {
-        self.directories.to_vec()
+    pub fn get_directories(&self) -> Vec<PathBuf> {
+        self.directories.to_vec().into_iter().map(|d| d.0).collect()
     }
 
     pub fn get_excluded(&self) -> Vec<String> {

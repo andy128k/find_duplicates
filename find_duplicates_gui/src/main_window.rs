@@ -314,7 +314,7 @@ impl MainWindow {
         action
     }
 
-    pub fn add_directory(&self, directory: &str) {
+    pub fn add_directory(&self, directory: &Path) {
         let private = self.get_private();
         private.widgets.options.add_directory(directory);
     }

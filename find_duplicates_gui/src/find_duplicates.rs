@@ -186,12 +186,11 @@ impl DuplicatesGroup {
 }
 
 pub fn find_duplicate_groups(
-    paths: &[String],
+    paths: &[PathBuf],
     exclude: &[String],
     min_size: u64,
     recurse: bool,
 ) -> Result<Vec<DuplicatesGroup>, Box<dyn Error>> {
-    let paths: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
     let exclude: Vec<glob::Pattern> = exclude
         .iter()
         .map(|p| glob::Pattern::new(&p))
