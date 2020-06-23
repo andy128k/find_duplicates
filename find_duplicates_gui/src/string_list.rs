@@ -1,11 +1,32 @@
 use gtk::prelude::*;
+use serde::{de::DeserializeOwned, Serialize};
+use std::marker::PhantomData;
 
-#[derive(Clone, newtype_gobject::NewTypeGObject)]
-pub struct StringList(gtk::ScrolledWindow);
+#[derive(Clone)]
+pub struct StringList<T>(gtk::ScrolledWindow, PhantomData<T>);
 
-impl StringList {
+pub struct StringListWeak<T>(glib::object::WeakRef<gtk::ScrolledWindow>, PhantomData<T>);
+
+impl<T> glib::clone::Downgrade for StringList<T> {
+    type Weak = StringListWeak<T>;
+
+    fn downgrade(&self) -> Self::Weak {
+        StringListWeak(glib::clone::Downgrade::downgrade(&self.0), PhantomData)
+    }
+}
+
+impl<T> glib::clone::Upgrade for StringListWeak<T> {
+    type Strong = StringList<T>;
+
+    fn upgrade(&self) -> Option<Self::Strong> {
+        glib::clone::Upgrade::upgrade(&self.0)
+            .map(|upgraded_inner| StringList(upgraded_inner, PhantomData))
+    }
+}
+
+impl<T> StringList<T> {
     pub fn new() -> Self {
-        let model = gtk::ListStore::new(&[glib::Type::String]);
+        let model = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
 
         let view = gtk::TreeViewBuilder::new()
             .can_focus(true)
@@ -35,7 +56,7 @@ impl StringList {
 
         scrolled_window.add(&view);
 
-        Self(scrolled_window)
+        Self(scrolled_window, PhantomData)
     }
 
     pub fn get_widget(&self) -> gtk::Widget {
@@ -54,22 +75,30 @@ impl StringList {
         self.get_model().clear()
     }
 
-    pub fn append(&self, value: &str) {
-        let model = self.get_model();
-        let iter = model.append();
-        model.set_value(&iter, 0, &glib::Value::from(value));
-    }
-
     pub fn remove_selection(&self) {
         let view = self.get_view();
         let model = self.get_model();
         remove_selection(&view, &model);
     }
+}
 
-    pub fn to_vec(&self) -> Vec<String> {
-        let mut result: Vec<String> = Vec::new();
+impl<T: ToString + Serialize + DeserializeOwned> StringList<T> {
+    pub fn append(&self, value: T) {
+        let bytes = bincode::serialize(&value).expect("Bincode serializes value");
+        let hex = hex::encode(&bytes);
+
+        let model = self.get_model();
+        let iter = model.append();
+        model.set_value(&iter, 0, &glib::Value::from(&value.to_string()));
+        model.set_value(&iter, 1, &glib::Value::from(&hex));
+    }
+
+    pub fn to_vec(&self) -> Vec<T> {
+        let mut result: Vec<T> = Vec::new();
         self.get_model().foreach(|model, _path, iter| {
-            let value: String = model.get_value(iter, 0).get().unwrap().unwrap();
+            let hex: String = model.get_value(iter, 1).get().unwrap().unwrap();
+            let bytes = hex::decode(&hex).unwrap();
+            let value = bincode::deserialize(&bytes).expect("Bincode deserializes value");
             result.push(value);
             false
         });

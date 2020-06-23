@@ -20,8 +20,8 @@ fn form_label(label: &str) -> gtk::Label {
 #[derive(Clone)]
 pub struct Options {
     container: gtk::Grid,
-    directories: StringList,
-    excluded: StringList,
+    directories: StringList<String>,
+    excluded: StringList<String>,
     recurse: gtk::CheckButton,
     min_size: gtk::Entry,
 }
@@ -50,33 +50,33 @@ fn pick_pattern(widget: &impl IsA<gtk::Widget>) -> Option<String> {
     }
 }
 
-fn add_directory_button(string_list: &StringList) -> gtk::Button {
+fn add_directory_button(string_list: &StringList<String>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Add directory")
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
         if let Some(new_value) = pick_directory(button) {
-            string_list.append(&new_value);
+            string_list.append(new_value);
         }
     }));
     button
 }
 
-fn add_pattern_button(string_list: &StringList) -> gtk::Button {
+fn add_pattern_button(string_list: &StringList<String>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Add pattern")
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
         if let Some(new_value) = pick_pattern(button) {
-            string_list.append(&new_value);
+            string_list.append(new_value);
         }
     }));
     button
 }
 
-fn remove_selection_button(string_list: &StringList) -> gtk::Button {
+fn remove_selection_button(string_list: &StringList<String>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Remove")
         .hexpand(false)
@@ -87,7 +87,7 @@ fn remove_selection_button(string_list: &StringList) -> gtk::Button {
     button
 }
 
-fn clear_button(string_list: &StringList) -> gtk::Button {
+fn clear_button(string_list: &StringList<String>) -> gtk::Button {
     let button = gtk::ButtonBuilder::new()
         .label("Clear")
         .hexpand(false)
@@ -191,11 +191,11 @@ impl Options {
     }
 
     pub fn add_directory(&self, value: &str) {
-        self.directories.append(value)
+        self.directories.append(value.to_string())
     }
 
     pub fn add_excluded(&self, value: &str) {
-        self.excluded.append(value)
+        self.excluded.append(value.to_string())
     }
 
     pub fn get_directories(&self) -> Vec<String> {
