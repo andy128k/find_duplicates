@@ -127,6 +127,52 @@ pub fn notify_error(parent: &gtk::Window, message: &str) {
     notify(gtk::MessageType::Error, parent, message)
 }
 
+pub fn notify_detailed(parent: &gtk::Window, message: &str, details: &str) {
+    let dlg = gtk::MessageDialogBuilder::new()
+        .message_type(gtk::MessageType::Info)
+        .transient_for(parent)
+        .text(message)
+        .buttons(gtk::ButtonsType::Ok)
+        .width_request(600)
+        .height_request(400)
+        .resizable(true)
+        .build();
+
+    let scrolled_window = gtk::ScrolledWindowBuilder::new()
+        .can_focus(true)
+        .margin_start(20)
+        .margin_end(20)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Automatic)
+        .shadow_type(gtk::ShadowType::EtchedIn)
+        .window_placement(gtk::CornerType::TopLeft)
+        .expand(true)
+        .build();
+    dlg.get_content_area()
+        .pack_start(&scrolled_window, true, true, 0);
+
+    let text_view = gtk::TextViewBuilder::new()
+        .can_focus(true)
+        .editable(false)
+        .overwrite(false)
+        .accepts_tab(true)
+        .justification(gtk::Justification::Left)
+        .wrap_mode(gtk::WrapMode::None)
+        .cursor_visible(true)
+        .left_margin(5)
+        .right_margin(5)
+        .top_margin(5)
+        .bottom_margin(5)
+        .build();
+    text_view.get_buffer().unwrap().set_text(details);
+
+    scrolled_window.add(&text_view);
+
+    dlg.show_all();
+    dlg.run();
+    dlg.destroy();
+}
+
 pub fn progress(parent: &gtk::Window, title: &str) -> gtk::Dialog {
     let dlg = gtk::DialogBuilder::new()
         .title(title)

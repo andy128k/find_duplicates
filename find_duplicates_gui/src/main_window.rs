@@ -693,20 +693,37 @@ impl MainWindow {
         }
 
         let mut deleted: Vec<gtk::TreeIter> = Vec::new();
+        let mut errors = Vec::new();
         for tree_path in selected {
             match self.delete_by_tree_path(&tree_path) {
                 Ok(iter) => {
                     deleted.push(iter);
                 }
                 Err(error) => {
-                    self.show_error(&error.to_string());
+                    errors.push(error);
                 }
             }
         }
 
         private.widgets.duplicates.remove_all(&deleted);
 
-        self.set_status(&format!("{} items deleted", deleted.len()));
+        if errors.is_empty() {
+            user_interaction::notify_info(
+                &self.0.clone().upcast(),
+                &format!("{} items deleted", deleted.len()),
+            );
+        } else {
+            let mut error_message = String::from("Following errors happened:\n");
+            for error in errors {
+                error_message.push_str("\n");
+                error_message.push_str(&error.to_string());
+            }
+            user_interaction::notify_detailed(
+                &self.0.clone().upcast(),
+                &format!("{} items deleted", deleted.len()),
+                &error_message,
+            );
+        }
     }
 
     fn delete_by_tree_path(&self, tree_path: &gtk::TreePath) -> io::Result<gtk::TreeIter> {
