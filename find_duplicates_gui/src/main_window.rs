@@ -1,6 +1,5 @@
 use crate::action_name::ActionName;
 use crate::duplicates_list;
-use crate::errors;
 use crate::exclusion::{Exclusion, DEFAULT_EXCLUDE_PATTERNS};
 use crate::find_duplicates::{duplication_status, find_duplicate_groups, DuplicatesGroup};
 use crate::options;
@@ -62,8 +61,7 @@ fn action_buttons() -> gtk::Widget {
     let row = gtk::ButtonBoxBuilder::new()
         .homogeneous(false)
         .spacing(8)
-        .margin_start(8)
-        .margin_end(8)
+        .margin(8)
         .orientation(gtk::Orientation::Horizontal)
         .layout_style(gtk::ButtonBoxStyle::End)
         .build();
@@ -131,7 +129,6 @@ fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
     let b = gtk::BoxBuilder::new()
         .orientation(gtk::Orientation::Vertical)
         .homogeneous(false)
-        .spacing(8)
         .build();
 
     let menu = gio::Menu::new()
@@ -151,13 +148,7 @@ fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
     let all_buttons = action_buttons();
     b.pack_start(&all_buttons, false, false, 0);
 
-    let errors = errors::Errors::new();
-    b.pack_start(&errors.get_widget(), false, false, 0);
-
-    let status = gtk::Statusbar::new();
-    b.pack_start(&status, false, false, 0);
-
-    builder.view(dups).errors(errors).status(status);
+    builder.view(dups);
 
     b
 }
@@ -196,12 +187,8 @@ type FindResult = Result<Vec<DuplicatesGroup>, String>;
 #[derive(derive_builder::Builder)]
 struct AppWidgets {
     duplicates: duplicates_list::DuplicatesStore,
-
     options: options::Options,
-
     view: duplicates_list::DuplicatesList,
-    errors: errors::Errors,
-    status: gtk::Statusbar,
 }
 
 #[derive(newtype_gobject::NewTypeGObject)]
@@ -305,12 +292,6 @@ impl MainWindow {
         private.widgets.options.add_directory(directory);
     }
 
-    fn set_status(&self, message: &str) {
-        let private = self.get_private();
-        private.widgets.status.pop(0);
-        private.widgets.status.push(0, message);
-    }
-
     fn add_excluded(&self, excluded: Exclusion) {
         let private = self.get_private();
         private.widgets.options.add_excluded(excluded);
@@ -318,18 +299,8 @@ impl MainWindow {
 
     fn fallible(&self, result: Result<(), Box<dyn Error>>) {
         if let Err(error) = result {
-            self.show_error(&error.to_string());
+            user_interaction::notify_error(&self.0.clone().upcast(), &error.to_string());
         }
-    }
-
-    fn show_error(&self, line: &str) {
-        let private = self.get_private();
-        private.widgets.errors.append(line);
-    }
-
-    fn clear_errors(&self) {
-        let private = self.get_private();
-        private.widgets.errors.clear();
     }
 
     fn on_find(&self) -> Result<(), Box<dyn Error>> {
@@ -344,14 +315,11 @@ impl MainWindow {
         let min_size: u64 = private.widgets.options.get_min_size();
         let recurse = private.widgets.options.get_recurse();
 
-        self.clear_errors();
-        self.set_status("");
         private.widgets.duplicates.clear();
 
         let progress = user_interaction::progress(&self.0.clone().upcast(), "Searching...");
         progress.show();
         *private.progress.borrow_mut() = Some(progress);
-        self.set_status("searching...");
 
         let sender = private.find_sender.clone();
         thread::spawn(move || {
@@ -370,8 +338,6 @@ impl MainWindow {
 
         match msg {
             Ok(duplicates) => {
-                self.set_status("processing...");
-
                 for group in &duplicates {
                     private
                         .widgets
@@ -385,14 +351,12 @@ impl MainWindow {
                     }
                 }
 
-                self.set_status("Done");
-
                 let status = duplication_status(&duplicates);
 
                 user_interaction::notify_info(&self.0.clone().upcast(), &status);
             }
             Err(error) => {
-                self.show_error(&error);
+                user_interaction::notify_error(&self.0.clone().upcast(), &error);
             }
         }
         glib::Continue(true)
@@ -439,8 +403,6 @@ impl MainWindow {
                 return Ok(());
             }
         }
-
-        self.clear_errors();
 
         let mut file = fs::OpenOptions::new()
             .write(true)
@@ -561,8 +523,6 @@ impl MainWindow {
             _ => return Ok(()),
         };
 
-        self.clear_errors();
-
         let mut new_path = old_path.parent().unwrap().to_path_buf();
         new_path.push(new_name);
 
@@ -600,7 +560,6 @@ impl MainWindow {
                 _ => return Ok(()),
             };
 
-        self.clear_errors();
         let pattern = glob::Pattern::new(&wildcard)?;
         let selection = private.widgets.view.get_selection();
         for (_group, files) in private.widgets.duplicates.group_iter() {
@@ -669,12 +628,9 @@ impl MainWindow {
         let private = self.get_private();
         let (selected, _model) = private.widgets.view.get_selection().get_selected_rows();
 
-        self.clear_errors();
-        self.set_status("");
-
         let count = selected.len();
         if count == 0 {
-            self.show_error("None selected");
+            user_interaction::notify_error(&self.0.clone().upcast(), "No file is selected");
             return;
         }
 
