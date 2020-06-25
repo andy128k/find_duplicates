@@ -705,10 +705,7 @@ impl MainWindow {
         }
 
         private.widgets.duplicates.remove_all(&deleted);
-        private
-            .widgets
-            .duplicates
-            .remove_groups_without_duplications();
+
         self.set_status(&format!("{} items deleted", deleted.len()));
     }
 

@@ -176,7 +176,7 @@ impl DuplicatesStore {
         gtk::TreeRowReference::new(&self.0, &path)
     }
 
-    pub fn remove_all(&self, iters: &[gtk::TreeIter]) {
+    fn remove_iters(&self, iters: &[gtk::TreeIter]) {
         let to_remove: Vec<gtk::TreeRowReference> =
             iters.iter().filter_map(|iter| self.get_ref(iter)).collect();
 
@@ -189,7 +189,9 @@ impl DuplicatesStore {
         }
     }
 
-    pub fn remove_groups_without_duplications(&self) {
+    pub fn remove_all(&self, iters: &[gtk::TreeIter]) {
+        self.remove_iters(iters);
+
         let mut to_remove: Vec<gtk::TreeIter> = Vec::new();
         for (group, files) in self.group_iter() {
             if files.len() <= 1 {
@@ -197,7 +199,8 @@ impl DuplicatesStore {
                 to_remove.extend(files);
             }
         }
-        self.remove_all(&to_remove);
+
+        self.remove_iters(&to_remove)
     }
 }
 
