@@ -364,9 +364,12 @@ impl MainWindow {
 
     fn on_save_as(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
-        let (selected, _model) = private.widgets.view.get_selection().get_selected_rows();
-        let to_save = if selected.len() > 0 {
-            self.get_selected_paths()
+        let selected = private.widgets.view.get_selected_iters();
+        let to_save: Vec<PathBuf> = if selected.len() > 0 {
+            selected
+                .iter()
+                .filter_map(|iter| private.widgets.duplicates.get_fs_path(iter))
+                .collect()
         } else {
             private
                 .widgets
@@ -417,41 +420,21 @@ impl MainWindow {
         Ok(())
     }
 
-    fn get_selected_iter(&self) -> Option<gtk::TreeIter> {
+    fn get_selected_fs_path(&self) -> Option<PathBuf> {
         let private = self.get_private();
-        let (selected, model) = private.widgets.view.get_selection().get_selected_rows();
-        if selected.len() != 1 {
-            return None;
-        }
-        let iter = model.get_iter(&selected[0])?;
-        Some(iter)
-    }
-
-    fn get_selected_path(&self) -> Option<PathBuf> {
-        let iter = self.get_selected_iter()?;
-        let private = self.get_private();
+        let iter = private.widgets.view.get_selected_iter()?;
         private.widgets.duplicates.get_fs_path(&iter)
     }
 
-    fn get_selected_paths(&self) -> Vec<PathBuf> {
-        let private = self.get_private();
-        let (selected, model) = private.widgets.view.get_selection().get_selected_rows();
-        selected
-            .into_iter()
-            .filter_map(|tree_path| model.get_iter(&tree_path))
-            .filter_map(|iter| private.widgets.duplicates.get_fs_path(&iter))
-            .collect()
-    }
-
     fn on_copy_to_clipboard(&self) {
-        if let Some(path) = self.get_selected_path() {
+        if let Some(path) = self.get_selected_fs_path() {
             let clipboard = gtk::Clipboard::get(&gdk::Atom::intern("CLIPBOARD"));
-            clipboard.set_text(path.to_str().unwrap());
+            clipboard.set_text(path.to_string_lossy().as_ref());
         }
     }
 
     fn on_open_file(&self) -> Result<(), Box<dyn Error>> {
-        if let Some(path) = self.get_selected_path() {
+        if let Some(path) = self.get_selected_fs_path() {
             xdg_open(&path)?;
         }
         Ok(())
@@ -459,7 +442,7 @@ impl MainWindow {
 
     fn on_open_directory(&self) -> Result<(), Box<dyn Error>> {
         if let Some(dir) = self
-            .get_selected_path()
+            .get_selected_fs_path()
             .and_then(|path| path.parent().map(|p| p.to_path_buf()))
         {
             xdg_open(&dir)?;
@@ -470,7 +453,7 @@ impl MainWindow {
     // select all other duplicates from selected item folder
     fn on_select_from_that_folder(&self) {
         let private = self.get_private();
-        if let Some(path) = self.get_selected_path() {
+        if let Some(path) = self.get_selected_fs_path() {
             if let Some(dir) = path.parent() {
                 for (_group, files) in private.widgets.duplicates.group_iter() {
                     for file in files {
@@ -506,7 +489,8 @@ impl MainWindow {
     }
 
     fn on_rename(&self) -> Result<(), Box<dyn Error>> {
-        let iter = match self.get_selected_iter() {
+        let private = self.get_private();
+        let iter = match private.widgets.view.get_selected_iter() {
             Some(iter) => iter,
             None => return Ok(()),
         };
@@ -537,7 +521,6 @@ impl MainWindow {
 
         fs::rename(old_path, &new_path)?;
 
-        let private = self.get_private();
         private.widgets.duplicates.set_path(&iter, &new_path);
 
         Ok(())
@@ -626,7 +609,7 @@ impl MainWindow {
 
     fn on_delete_selected(&self) {
         let private = self.get_private();
-        let (selected, _model) = private.widgets.view.get_selection().get_selected_rows();
+        let selected = private.widgets.view.get_selected_iters();
 
         let count = selected.len();
         if count == 0 {
@@ -650,9 +633,9 @@ impl MainWindow {
 
         let mut deleted: Vec<gtk::TreeIter> = Vec::new();
         let mut errors = Vec::new();
-        for tree_path in selected {
-            match self.delete_by_tree_path(&tree_path) {
-                Ok(iter) => {
+        for iter in selected {
+            match self.delete_file_by_tree_iter(&iter) {
+                Ok(_) => {
                     deleted.push(iter);
                 }
                 Err(error) => {
@@ -682,17 +665,8 @@ impl MainWindow {
         }
     }
 
-    fn delete_by_tree_path(
-        &self,
-        tree_path: &gtk::TreePath,
-    ) -> Result<gtk::TreeIter, Box<dyn Error>> {
+    fn delete_file_by_tree_iter(&self, iter: &gtk::TreeIter) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
-        let iter = private
-            .widgets
-            .duplicates
-            .to_model()
-            .get_iter(tree_path)
-            .ok_or_else(|| "Cannot get iter of tree path.")?;
         let fs_path = private
             .widgets
             .duplicates
@@ -700,6 +674,6 @@ impl MainWindow {
             .ok_or_else(|| "Cannot get path to file by iter.")?;
         fs::remove_file(&fs_path)
             .map_err(|e| format!("File {} cannot be removed. {}", fs_path.display(), e))?;
-        Ok(iter)
+        Ok(())
     }
 }

@@ -397,4 +397,21 @@ impl DuplicatesList {
     pub fn get_selection(&self) -> gtk::TreeSelection {
         self.tree_view.get_selection()
     }
+
+    pub fn get_selected_iters(&self) -> Vec<gtk::TreeIter> {
+        let (selected, model) = self.tree_view.get_selection().get_selected_rows();
+        selected
+            .into_iter()
+            .filter_map(|tree_path| model.get_iter(&tree_path))
+            .collect()
+    }
+
+    pub fn get_selected_iter(&self) -> Option<gtk::TreeIter> {
+        let mut selected = self.get_selected_iters();
+        if selected.len() == 1 {
+            selected.pop()
+        } else {
+            None
+        }
+    }
 }
