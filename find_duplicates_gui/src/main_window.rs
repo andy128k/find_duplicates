@@ -16,7 +16,7 @@ use std::cell::{Cell, RefCell};
 use std::env;
 use std::error::Error;
 use std::fs;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
@@ -682,22 +682,24 @@ impl MainWindow {
         }
     }
 
-    fn delete_by_tree_path(&self, tree_path: &gtk::TreePath) -> io::Result<gtk::TreeIter> {
+    fn delete_by_tree_path(
+        &self,
+        tree_path: &gtk::TreePath,
+    ) -> Result<gtk::TreeIter, Box<dyn Error>> {
         let private = self.get_private();
         let iter = private
             .widgets
             .duplicates
             .to_model()
             .get_iter(tree_path)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Cannot get iter of tree path."))?;
+            .ok_or_else(|| "Cannot get iter of tree path.")?;
         let fs_path = private
             .widgets
             .duplicates
             .get_fs_path(&iter)
-            .ok_or_else(|| {
-                io::Error::new(io::ErrorKind::Other, "Cannot get path to file by iter.")
-            })?;
-        fs::remove_file(&fs_path)?;
+            .ok_or_else(|| "Cannot get path to file by iter.")?;
+        fs::remove_file(&fs_path)
+            .map_err(|e| format!("File {} cannot be removed. {}", fs_path.display(), e))?;
         Ok(iter)
     }
 }
