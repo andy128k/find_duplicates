@@ -119,7 +119,7 @@ impl DuplicatesStore {
         );
     }
 
-    pub fn get_path(&self, iter: &gtk::TreeIter) -> Option<PathBuf> {
+    pub fn get_fs_path(&self, iter: &gtk::TreeIter) -> Option<PathBuf> {
         let path: String = self
             .0
             .get_value(iter, StoreColumn::Path as i32)

@@ -373,7 +373,7 @@ impl MainWindow {
                 .duplicates
                 .group_iter()
                 .flat_map(|(_group, files)| files.into_iter())
-                .filter_map(|iter| private.widgets.duplicates.get_path(&iter))
+                .filter_map(|iter| private.widgets.duplicates.get_fs_path(&iter))
                 .collect()
         };
 
@@ -430,7 +430,7 @@ impl MainWindow {
     fn get_selected_path(&self) -> Option<PathBuf> {
         let iter = self.get_selected_iter()?;
         let private = self.get_private();
-        private.widgets.duplicates.get_path(&iter)
+        private.widgets.duplicates.get_fs_path(&iter)
     }
 
     fn get_selected_paths(&self) -> Vec<PathBuf> {
@@ -439,7 +439,7 @@ impl MainWindow {
         selected
             .into_iter()
             .filter_map(|tree_path| model.get_iter(&tree_path))
-            .filter_map(|iter| private.widgets.duplicates.get_path(&iter))
+            .filter_map(|iter| private.widgets.duplicates.get_fs_path(&iter))
             .collect()
     }
 
@@ -477,7 +477,7 @@ impl MainWindow {
                         if private
                             .widgets
                             .duplicates
-                            .get_path(&file)
+                            .get_fs_path(&file)
                             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
                             == Some(dir.to_path_buf())
                         {
@@ -494,7 +494,7 @@ impl MainWindow {
         let path = private
             .widgets
             .duplicates
-            .get_path(&iter)
+            .get_fs_path(&iter)
             .ok_or_else(|| "Cannot get path of the file")?;
         let name = path
             .file_name()
@@ -564,7 +564,7 @@ impl MainWindow {
         let selection = private.widgets.view.get_selection();
         for (_group, files) in private.widgets.duplicates.group_iter() {
             for file_iter in files {
-                let fs_path = private.widgets.duplicates.get_path(&file_iter).unwrap();
+                let fs_path = private.widgets.duplicates.get_fs_path(&file_iter).unwrap();
                 if pattern.matches_path(&fs_path) {
                     if select {
                         selection.select_iter(&file_iter);
@@ -690,9 +690,13 @@ impl MainWindow {
             .to_model()
             .get_iter(tree_path)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Cannot get iter of tree path."))?;
-        let fs_path = private.widgets.duplicates.get_path(&iter).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Cannot get path to file by iter.")
-        })?;
+        let fs_path = private
+            .widgets
+            .duplicates
+            .get_fs_path(&iter)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::Other, "Cannot get path to file by iter.")
+            })?;
         fs::remove_file(&fs_path)?;
         Ok(iter)
     }
