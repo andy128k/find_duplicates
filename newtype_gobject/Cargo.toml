@@ -1,9 +1,0 @@
-[package]
-name = "newtype_gobject"
-version = "0.1.0"
-authors = ["Andrey Kutejko <andy128k@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-glib = "0.10"
-newtype_gobject_derive = { path = "../newtype_gobject_derive" }

@@ -190,7 +190,7 @@ struct AppWidgets {
     view: duplicates_list::DuplicatesList,
 }
 
-#[derive(newtype_gobject::NewTypeGObject)]
+#[derive(newtype_gobject_derive::NewTypeGObject)]
 pub struct MainWindow(gtk::ApplicationWindow);
 
 pub struct MainWindowPrivate {

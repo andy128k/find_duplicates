@@ -214,7 +214,7 @@ dependencies = [
  "gtk",
  "hex",
  "lazy_static",
- "newtype_gobject",
+ "newtype_gobject_derive",
  "serde",
  "sha2",
 ]
@@ -583,14 +583,6 @@ name = "memchr"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
-
-[[package]]
-name = "newtype_gobject"
-version = "0.1.0"
-dependencies = [
- "glib",
- "newtype_gobject_derive",
-]
 
 [[package]]
 name = "newtype_gobject_derive"
