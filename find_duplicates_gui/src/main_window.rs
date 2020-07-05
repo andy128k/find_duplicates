@@ -191,7 +191,7 @@ struct AppWidgets {
 }
 
 #[derive(newtype_gobject::NewTypeGObject)]
-pub struct MainWindow(pub gtk::ApplicationWindow);
+pub struct MainWindow(gtk::ApplicationWindow);
 
 pub struct MainWindowPrivate {
     confirm_delete: Cell<bool>,
@@ -227,6 +227,10 @@ impl MainWindow {
         }
 
         window
+    }
+
+    pub fn show_all(&self) {
+        self.0.show_all();
     }
 
     fn get_private(&self) -> &MainWindowPrivate {
