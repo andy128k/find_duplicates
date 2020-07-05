@@ -5,5 +5,5 @@ authors = ["Andrey Kutejko <andy128k@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-glib = "0.9"
+glib = "0.10"
 newtype_gobject_derive = { path = "../newtype_gobject_derive" }

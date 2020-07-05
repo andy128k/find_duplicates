@@ -25,7 +25,7 @@ pub fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
         _ => None,
     };
 
-    dlg.destroy();
+    dlg.close();
 
     result
 }
@@ -54,7 +54,7 @@ pub fn save_as(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
         _ => None,
     };
 
-    dlg.destroy();
+    dlg.close();
 
     result
 }

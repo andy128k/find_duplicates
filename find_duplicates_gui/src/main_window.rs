@@ -11,7 +11,6 @@ use crate::widgets::menu_builder::MenuBuilderExt;
 use gio::prelude::*;
 use glib::clone;
 use gtk::prelude::*;
-use newtype_gobject::object_data::ObjectDataExt;
 use std::cell::{Cell, RefCell};
 use std::env;
 use std::error::Error;
@@ -333,7 +332,9 @@ impl MainWindow {
         let private = self.get_private();
 
         if let Some(progress) = private.progress.borrow_mut().take() {
-            progress.destroy();
+            unsafe {
+                progress.destroy();
+            }
         }
 
         match msg {

@@ -50,10 +50,10 @@ pub fn prompt(parent: &gtk::Window, title: &str, message: &str, value: &str) -> 
 
     dlg.show_all();
     let result = match dlg.run() {
-        gtk::ResponseType::Ok => entry.get_text().map(|s| s.to_string()),
+        gtk::ResponseType::Ok => Some(entry.get_text().to_string()),
         _ => None,
     };
-    dlg.destroy();
+    dlg.close();
     result
 }
 
@@ -90,7 +90,7 @@ pub fn confirm_delete(parent: &gtk::Window, message: &str) -> (bool, bool) {
         gtk::ResponseType::Ok => (true, again.get_active()),
         _ => (false, again.get_active()),
     };
-    dlg.destroy();
+    dlg.close();
     result
 }
 
@@ -103,7 +103,7 @@ pub fn confirm(parent: &gtk::Window, message: &str) -> bool {
         .build();
     dlg.show_all();
     let result = dlg.run();
-    dlg.destroy();
+    dlg.close();
     result == gtk::ResponseType::Yes
 }
 
@@ -116,7 +116,7 @@ pub fn notify(message_type: gtk::MessageType, parent: &gtk::Window, message: &st
         .build();
     dlg.show_all();
     dlg.run();
-    dlg.destroy();
+    dlg.close();
 }
 
 pub fn notify_info(parent: &gtk::Window, message: &str) {
@@ -170,7 +170,7 @@ pub fn notify_detailed(parent: &gtk::Window, message: &str, details: &str) {
 
     dlg.show_all();
     dlg.run();
-    dlg.destroy();
+    dlg.close();
 }
 
 pub fn progress(parent: &gtk::Window, title: &str) -> gtk::Dialog {

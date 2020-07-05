@@ -236,9 +236,6 @@ impl Options {
     }
 
     pub fn get_min_size(&self) -> u64 {
-        self.min_size
-            .get_text()
-            .and_then(|text| u64::from_str_radix(&text, 10).ok())
-            .unwrap_or_default()
+        u64::from_str_radix(&self.min_size.get_text(), 10).unwrap_or_default()
     }
 }
