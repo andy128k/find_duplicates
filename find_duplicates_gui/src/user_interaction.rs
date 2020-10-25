@@ -197,7 +197,7 @@ pub fn progress(parent: &gtk::Window, title: &str) -> gtk::Dialog {
     dlg.get_content_area().add(&progress_bar);
 
     let weak_progress_bar = progress_bar.downgrade();
-    gtk::timeout_add(100, move || {
+    glib::timeout_add_local(100, move || {
         if let Some(progress_bar) = weak_progress_bar.upgrade() {
             progress_bar.pulse();
             glib::Continue(true)
