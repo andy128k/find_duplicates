@@ -1,28 +1,9 @@
+use crate::phantom_data_weak::PhantomData;
 use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::marker::PhantomData;
 
-#[derive(Clone)]
+#[derive(Clone, newtype_gobject_derive::GlibDowngrade)]
 pub struct StringList<T>(gtk::ScrolledWindow, PhantomData<T>);
-
-pub struct StringListWeak<T>(glib::object::WeakRef<gtk::ScrolledWindow>, PhantomData<T>);
-
-impl<T> glib::clone::Downgrade for StringList<T> {
-    type Weak = StringListWeak<T>;
-
-    fn downgrade(&self) -> Self::Weak {
-        StringListWeak(glib::clone::Downgrade::downgrade(&self.0), PhantomData)
-    }
-}
-
-impl<T> glib::clone::Upgrade for StringListWeak<T> {
-    type Strong = StringList<T>;
-
-    fn upgrade(&self) -> Option<Self::Strong> {
-        glib::clone::Upgrade::upgrade(&self.0)
-            .map(|upgraded_inner| StringList(upgraded_inner, PhantomData))
-    }
-}
 
 impl<T> StringList<T> {
     pub fn new() -> Self {
@@ -56,7 +37,7 @@ impl<T> StringList<T> {
 
         scrolled_window.add(&view);
 
-        Self(scrolled_window, PhantomData)
+        Self(scrolled_window, PhantomData::new())
     }
 
     pub fn get_widget(&self) -> gtk::Widget {
