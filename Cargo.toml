@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "newtype_gobject_derive",
+    "supplemental_macros",
     "find_duplicates_gui",
 ]

@@ -2,7 +2,7 @@ use crate::phantom_data_weak::PhantomData;
 use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 
-#[derive(Clone, newtype_gobject_derive::GlibDowngrade)]
+#[derive(Clone, supplemental_macros::GlibDowngrade)]
 pub struct StringList<T>(gtk::ScrolledWindow, PhantomData<T>);
 
 impl<T> StringList<T> {

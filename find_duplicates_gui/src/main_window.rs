@@ -190,7 +190,7 @@ struct AppWidgets {
     view: duplicates_list::DuplicatesList,
 }
 
-#[derive(newtype_gobject_derive::GlibDowngrade)]
+#[derive(supplemental_macros::GlibDowngrade)]
 pub struct MainWindow(gtk::ApplicationWindow);
 
 pub struct MainWindowPrivate {

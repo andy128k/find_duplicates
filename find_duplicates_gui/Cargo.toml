@@ -21,4 +21,4 @@ sha2 = "0.9"
 generic-array = "0.14"
 lazy_static = "1"
 
-newtype_gobject_derive = { path = "../newtype_gobject_derive" }
+supplemental_macros = { path = "../supplemental_macros" }
