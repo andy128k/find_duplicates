@@ -1,4 +1,3 @@
-use crate::action_name::ActionName;
 use crate::duplicates_list;
 use crate::exclusion::{Exclusion, DEFAULT_EXCLUDE_PATTERNS};
 use crate::find_duplicates::{duplication_status, find_duplicate_groups, DuplicatesGroup};
@@ -15,45 +14,14 @@ use std::cell::{Cell, RefCell};
 use std::env;
 use std::error::Error;
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
-mod action {
-    use crate::action_name::*;
-
-    pub const FIND: ActionName = action_name!(win, find);
-
-    pub const SELECT_WILDCARD: ActionName = action_name!(win, select_wildcard);
-    pub const UNSELECT_WILDCARD: ActionName = action_name!(win, unselect_wildcard);
-
-    pub const SELECT_ALL_BUT_FIRST: ActionName = action_name!(win, select_but_first);
-    pub const SELECT_ALL_BUT_NEWEST: ActionName = action_name!(win, select_but_newest);
-    pub const SELECT_ALL_BUT_OLDEST: ActionName = action_name!(win, select_but_oldest);
-
-    pub const SELECT_TOGGLE: ActionName = action_name!(win, select_toggle);
-    pub const UNSELECT_ALL: ActionName = action_name!(win, unselect_all);
-
-    pub const OPEN: ActionName = action_name!(win, open);
-    pub const OPEN_DIRECTORY: ActionName = action_name!(win, open_directory);
-    pub const COPY: ActionName = action_name!(win, copy);
-    pub const RENAME: ActionName = action_name!(win, rename);
-    pub const SELECT_FROM_SAME_FOLDER: ActionName = action_name!(win, select_from_same_folder);
-
-    pub const DELETE: ActionName = action_name!(win, delete);
-    pub const SAVE: ActionName = action_name!(win, save);
-}
-
 fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
     Command::new("xdg-open").arg(file).spawn()?;
     Ok(())
-}
-
-pub enum GroupCleanOption {
-    First,
-    Newest,
-    Oldest,
 }
 
 fn action_buttons() -> gtk::Widget {
@@ -67,29 +35,29 @@ fn action_buttons() -> gtk::Widget {
 
     let del = gtk::ButtonBuilder::new()
         .label("Delete")
-        .action_name(action::DELETE.full())
+        .action_name("win.delete")
         .build();
     row.pack_end(&del, false, false, 1);
 
     let save = gtk::ButtonBuilder::new()
         .label("Save")
         .tooltip_text("Save (selected) list to file")
-        .action_name(action::SAVE.full())
+        .action_name("win.save")
         .build();
     row.pack_end(&save, false, false, 1);
 
     let menu = gio::Menu::new()
-        .item("Select using wildcard", &action::SELECT_WILDCARD)
-        .item("Unselect using wildcard", &action::UNSELECT_WILDCARD)
+        .item("Select using wildcard", "win.select_wildcard(true)")
+        .item("Unselect using wildcard", "win.select_wildcard(false)")
         .submenu(
             "Select within groups",
             gio::Menu::new()
-                .item("Select all but first", &action::SELECT_ALL_BUT_FIRST)
-                .item("Select all but newest", &action::SELECT_ALL_BUT_NEWEST)
-                .item("Select all but oldest", &action::SELECT_ALL_BUT_OLDEST),
+                .item("Select all but first", r#"win.select_all_but("first")"#)
+                .item("Select all but newest", r#"win.select_all_but("newest")"#)
+                .item("Select all but oldest", r#"win.select_all_but("oldest")"#),
         )
-        .item("Toggle selection", &action::SELECT_TOGGLE)
-        .item("Unselect all", &action::UNSELECT_ALL);
+        .item("Toggle selection", "win.select_toggle")
+        .item("Unselect all", "win.unselect_all");
 
     let select = gtk::MenuButtonBuilder::new()
         .label("Select")
@@ -116,7 +84,7 @@ fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
     b.attach(&horizontal_expander(), 0, 1, 1, 1);
 
     let find = go_button("Find");
-    find.set_action_name(Some(action::FIND.full()));
+    find.set_action_name(Some("win.find"));
     b.attach(&find, 1, 1, 1, 1);
 
     builder.options(options);
@@ -131,13 +99,13 @@ fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
         .build();
 
     let menu = gio::Menu::new()
-        .item("Open", &action::OPEN)
-        .item("Open directory", &action::OPEN_DIRECTORY)
-        .item("Copy", &action::COPY)
-        .item("Rename...", &action::RENAME)
+        .item("Open", "win.open")
+        .item("Open directory", "win.open_directory")
+        .item("Copy", "win.copy")
+        .item("Rename...", "win.rename")
         .item(
             "Select all in this directory",
-            &action::SELECT_FROM_SAME_FOLDER,
+            "win.select_from_same_directory",
         );
 
     let dups = duplicates_list::DuplicatesList::new(builder.duplicates.as_ref().unwrap());
@@ -220,7 +188,8 @@ impl MainWindow {
             window.0.set_data::<MainWindowPrivate>("private", private);
         }
 
-        window.connect_signals(find_receiver);
+        window.register_actions(&window.0);
+        find_receiver.attach(None, clone!(@weak window => @default-return glib::Continue(false), move |msg| window.on_find_finished(msg)));
 
         for ignore in DEFAULT_EXCLUDE_PATTERNS.iter() {
             window.add_excluded(ignore.clone());
@@ -237,59 +206,6 @@ impl MainWindow {
         unsafe { self.0.get_data::<MainWindowPrivate>("private").unwrap() }
     }
 
-    fn connect_signals(&self, find_receiver: glib::Receiver<FindResult>) {
-        self.create_action(&action::FIND).connect_activate(
-            clone!(@weak self as window => move |_, _| window.fallible(window.on_find())),
-        );
-        self.create_action(&action::DELETE).connect_activate(
-            clone!(@weak self as window => move |_, _| window.on_delete_selected()),
-        );
-        self.create_action(&action::SAVE).connect_activate(
-            clone!(@weak self as window => move |_, _| window.on_save_as().unwrap()),
-        );
-        self.create_action(&action::OPEN).connect_activate(
-            clone!(@weak self as window => move |_, _| window.fallible(window.on_open_file())),
-        );
-        self.create_action(&action::OPEN_DIRECTORY).connect_activate(
-            clone!(@weak self as window => move |_, _| window.fallible(window.on_open_directory())),
-        );
-        self.create_action(&action::COPY).connect_activate(
-            clone!(@weak self as window => move |_, _| window.on_copy_to_clipboard()),
-        );
-        self.create_action(&action::RENAME).connect_activate(
-            clone!(@weak self as window => move |_, _| window.fallible(window.on_rename())),
-        );
-        self.create_action(&action::SELECT_FROM_SAME_FOLDER)
-            .connect_activate(
-                clone!(@weak self as window => move |_, _| window.on_select_from_that_folder()),
-            );
-
-        self.create_action(&action::SELECT_WILDCARD)
-            .connect_activate(
-                clone!(@weak self as window => move |_, _| window.fallible(window.on_select_using_wildcard(true))),
-            );
-        self.create_action(&action::UNSELECT_WILDCARD)
-            .connect_activate(
-                clone!(@weak self as window => move |_, _| window.fallible(window.on_select_using_wildcard(false))),
-            );
-        self.create_action(&action::SELECT_ALL_BUT_FIRST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::First)));
-        self.create_action(&action::SELECT_ALL_BUT_NEWEST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Newest)));
-        self.create_action(&action::SELECT_ALL_BUT_OLDEST).connect_activate(clone!(@weak self as window => move |_, _| window.on_select_all_but_one_in_each_group(GroupCleanOption::Oldest)));
-        self.create_action(&action::SELECT_TOGGLE).connect_activate(
-            clone!(@weak self as window => move |_, _| window.on_toggle_selection()),
-        );
-        self.create_action(&action::UNSELECT_ALL)
-            .connect_activate(clone!(@weak self as window => move |_, _| window.on_unselect_all()));
-
-        find_receiver.attach(None, clone!(@weak self as window =>  @default-return glib::Continue(false), move |msg| window.on_find_finished(msg)));
-    }
-
-    fn create_action(&self, name: &ActionName) -> gio::SimpleAction {
-        let action = gio::SimpleAction::new(name.local(), None);
-        self.0.add_action(&action);
-        action
-    }
-
     pub fn add_directory(&self, directory: &Path) {
         let private = self.get_private();
         private.widgets.options.add_directory(directory);
@@ -298,38 +214,6 @@ impl MainWindow {
     fn add_excluded(&self, excluded: Exclusion) {
         let private = self.get_private();
         private.widgets.options.add_excluded(excluded);
-    }
-
-    fn fallible(&self, result: Result<(), Box<dyn Error>>) {
-        if let Err(error) = result {
-            user_interaction::notify_error(&self.0.clone().upcast(), &error.to_string());
-        }
-    }
-
-    fn on_find(&self) -> Result<(), Box<dyn Error>> {
-        let private = self.get_private();
-
-        let search_dirs = private.widgets.options.get_directories();
-        if search_dirs.is_empty() {
-            return Err("No search paths specified".into());
-        }
-        let excluded = private.widgets.options.get_excluded();
-
-        let min_size: u64 = private.widgets.options.get_min_size();
-        let recurse = private.widgets.options.get_recurse();
-
-        private.widgets.duplicates.clear();
-
-        let progress = user_interaction::progress(&self.0.clone().upcast(), "Searching...");
-        progress.show();
-        *private.progress.borrow_mut() = Some(progress);
-
-        let sender = private.find_sender.clone();
-        thread::spawn(move || {
-            let duplicates = find_duplicate_groups(&search_dirs, &excluded, min_size, recurse);
-            let _ = sender.send(duplicates.map_err(|err| err.to_string()));
-        });
-        Ok(())
     }
 
     fn on_find_finished(&self, msg: FindResult) -> glib::Continue {
@@ -361,13 +245,13 @@ impl MainWindow {
                 user_interaction::notify_info(&self.0.clone().upcast(), &status);
             }
             Err(error) => {
-                user_interaction::notify_error(&self.0.clone().upcast(), &error);
+                self.show_error(&error);
             }
         }
         glib::Continue(true)
     }
 
-    fn on_save_as(&self) -> Result<(), Box<dyn Error>> {
+    fn do_save(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
         let selected = private.widgets.view.get_selected_iters();
         let to_save: Vec<PathBuf> = if selected.len() > 0 {
@@ -404,24 +288,12 @@ impl MainWindow {
                     return Ok(());
                 }
             } else {
-                user_interaction::notify_error(
-                    &self.0.clone().upcast(),
-                    &format!("You can't overwrite {}", file_save_as.display()),
-                );
+                self.show_error(format!("You can't overwrite {}", file_save_as.display()));
                 return Ok(());
             }
         }
 
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(file_save_as)?;
-
-        for path in to_save {
-            file.write_all(path.to_str().unwrap().as_bytes())?;
-            file.write_all(b"\n")?;
-        }
+        save_file(&file_save_as, &to_save)?;
         Ok(())
     }
 
@@ -429,52 +301,6 @@ impl MainWindow {
         let private = self.get_private();
         let iter = private.widgets.view.get_selected_iter()?;
         private.widgets.duplicates.get_fs_path(&iter)
-    }
-
-    fn on_copy_to_clipboard(&self) {
-        if let Some(path) = self.get_selected_fs_path() {
-            let clipboard = gtk::Clipboard::get(&gdk::Atom::intern("CLIPBOARD"));
-            clipboard.set_text(path.to_string_lossy().as_ref());
-        }
-    }
-
-    fn on_open_file(&self) -> Result<(), Box<dyn Error>> {
-        if let Some(path) = self.get_selected_fs_path() {
-            xdg_open(&path)?;
-        }
-        Ok(())
-    }
-
-    fn on_open_directory(&self) -> Result<(), Box<dyn Error>> {
-        if let Some(dir) = self
-            .get_selected_fs_path()
-            .and_then(|path| path.parent().map(|p| p.to_path_buf()))
-        {
-            xdg_open(&dir)?;
-        }
-        Ok(())
-    }
-
-    // select all other duplicates from selected item folder
-    fn on_select_from_that_folder(&self) {
-        let private = self.get_private();
-        if let Some(path) = self.get_selected_fs_path() {
-            if let Some(dir) = path.parent() {
-                for (_group, files) in private.widgets.duplicates.group_iter() {
-                    for file in files {
-                        if private
-                            .widgets
-                            .duplicates
-                            .get_fs_path(&file)
-                            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                            == Some(dir.to_path_buf())
-                        {
-                            private.widgets.view.get_selection().select_iter(&file);
-                        }
-                    }
-                }
-            }
-        }
     }
 
     fn get_path_and_name(&self, iter: &gtk::TreeIter) -> Result<(PathBuf, String), Box<dyn Error>> {
@@ -493,7 +319,7 @@ impl MainWindow {
         Ok((path, name))
     }
 
-    fn on_rename(&self) -> Result<(), Box<dyn Error>> {
+    fn do_rename(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
         let iter = match private.widgets.view.get_selected_iter() {
             Some(iter) => iter,
@@ -531,10 +357,110 @@ impl MainWindow {
         Ok(())
     }
 
-    fn on_select_using_wildcard(&self, select: bool) -> Result<(), Box<dyn Error>> {
+    fn delete_file_by_tree_iter(&self, iter: &gtk::TreeIter) -> Result<(), Box<dyn Error>> {
+        let private = self.get_private();
+        let fs_path = private
+            .widgets
+            .duplicates
+            .get_fs_path(&iter)
+            .ok_or_else(|| "Cannot get path to file by iter.")?;
+        fs::remove_file(&fs_path)
+            .map_err(|e| format!("File {} cannot be removed. {}", fs_path.display(), e))?;
+        Ok(())
+    }
+
+    fn show_error(&self, message: impl ToString) {
+        user_interaction::notify_error(&self.0.clone().upcast(), &message.to_string());
+    }
+}
+
+#[supplemental_macros::actions]
+impl MainWindow {
+    fn find(&self) {
+        let private = self.get_private();
+
+        let search_dirs = private.widgets.options.get_directories();
+        if search_dirs.is_empty() {
+            self.show_error("No search paths specified");
+            return;
+        }
+        let excluded = private.widgets.options.get_excluded();
+
+        let min_size: u64 = private.widgets.options.get_min_size();
+        let recurse = private.widgets.options.get_recurse();
+
+        private.widgets.duplicates.clear();
+
+        let progress = user_interaction::progress(&self.0.clone().upcast(), "Searching...");
+        progress.show();
+        *private.progress.borrow_mut() = Some(progress);
+
+        let sender = private.find_sender.clone();
+        thread::spawn(move || {
+            let duplicates = find_duplicate_groups(&search_dirs, &excluded, min_size, recurse);
+            let _ = sender.send(duplicates.map_err(|err| err.to_string()));
+        });
+    }
+
+    fn open(&self) {
+        if let Some(path) = self.get_selected_fs_path() {
+            if let Err(error) = xdg_open(&path) {
+                self.show_error(error);
+            }
+        }
+    }
+
+    fn open_directory(&self) {
+        if let Some(dir) = self
+            .get_selected_fs_path()
+            .and_then(|path| path.parent().map(|p| p.to_path_buf()))
+        {
+            if let Err(error) = xdg_open(&dir) {
+                self.show_error(error);
+            }
+        }
+    }
+
+    fn copy(&self) {
+        if let Some(path) = self.get_selected_fs_path() {
+            let clipboard = gtk::Clipboard::get(&gdk::Atom::intern("CLIPBOARD"));
+            clipboard.set_text(path.to_string_lossy().as_ref());
+        }
+    }
+
+    fn rename(&self) {
+        if let Err(error) = self.do_rename() {
+            self.show_error(error);
+        }
+    }
+
+    /// select all other duplicates from selected item folder
+    fn select_from_same_directory(&self) {
+        let private = self.get_private();
+        if let Some(path) = self.get_selected_fs_path() {
+            if let Some(dir) = path.parent() {
+                for (_group, files) in private.widgets.duplicates.group_iter() {
+                    for file in files {
+                        if private
+                            .widgets
+                            .duplicates
+                            .get_fs_path(&file)
+                            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                            == Some(dir.to_path_buf())
+                        {
+                            private.widgets.view.get_selection().select_iter(&file);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[action(parameter_type = "b")]
+    fn select_wildcard(&self, select: bool) {
         let private = self.get_private();
         if private.widgets.duplicates.is_empty() {
-            return Ok(());
+            return;
         }
 
         let title = if select {
@@ -545,10 +471,17 @@ impl MainWindow {
         let wildcard =
             match user_interaction::prompt(&self.0.clone().upcast(), title, "Wildcard:", "*") {
                 Some(answer) if !answer.is_empty() => answer,
-                _ => return Ok(()),
+                _ => return,
             };
 
-        let pattern = glob::Pattern::new(&wildcard)?;
+        let pattern = match glob::Pattern::new(&wildcard) {
+            Ok(pattern) => pattern,
+            Err(error) => {
+                self.show_error(&error.to_string());
+                return;
+            }
+        };
+
         let selection = private.widgets.view.get_selection();
         for (_group, files) in private.widgets.duplicates.group_iter() {
             for file_iter in files {
@@ -562,19 +495,20 @@ impl MainWindow {
                 }
             }
         }
-        Ok(())
     }
 
-    fn on_select_all_but_one_in_each_group(&self, which: GroupCleanOption) {
+    #[action(parameter_type = "s")]
+    fn select_all_but(&self, which: String) {
         fn find_row_to_unselect<'i>(
             model: &duplicates_list::DuplicatesStore,
             files: &'i [gtk::TreeIter],
-            which: &GroupCleanOption,
+            which: &str,
         ) -> Option<&'i gtk::TreeIter> {
             match which {
-                GroupCleanOption::First => files.first(),
-                GroupCleanOption::Newest => files.iter().max_by_key(|iter| model.modified(iter)),
-                GroupCleanOption::Oldest => files.iter().min_by_key(|iter| model.modified(iter)),
+                "first" => files.first(),
+                "newest" => files.iter().max_by_key(|iter| model.modified(iter)),
+                "oldest" => files.iter().min_by_key(|iter| model.modified(iter)),
+                _ => None,
             }
         }
 
@@ -592,12 +526,7 @@ impl MainWindow {
         }
     }
 
-    fn on_unselect_all(&self) {
-        let private = self.get_private();
-        private.widgets.view.get_selection().unselect_all();
-    }
-
-    fn on_toggle_selection(&self) {
+    fn select_toggle(&self) {
         let private = self.get_private();
 
         let selection = private.widgets.view.get_selection();
@@ -612,13 +541,18 @@ impl MainWindow {
         }
     }
 
-    fn on_delete_selected(&self) {
+    fn unselect_all(&self) {
+        let private = self.get_private();
+        private.widgets.view.get_selection().unselect_all();
+    }
+
+    fn delete_selected(&self) {
         let private = self.get_private();
         let selected = private.widgets.view.get_selected_iters();
 
         let count = selected.len();
         if count == 0 {
-            user_interaction::notify_error(&self.0.clone().upcast(), "No file is selected");
+            self.show_error("No file is selected");
             return;
         }
 
@@ -670,15 +604,23 @@ impl MainWindow {
         }
     }
 
-    fn delete_file_by_tree_iter(&self, iter: &gtk::TreeIter) -> Result<(), Box<dyn Error>> {
-        let private = self.get_private();
-        let fs_path = private
-            .widgets
-            .duplicates
-            .get_fs_path(&iter)
-            .ok_or_else(|| "Cannot get path to file by iter.")?;
-        fs::remove_file(&fs_path)
-            .map_err(|e| format!("File {} cannot be removed. {}", fs_path.display(), e))?;
-        Ok(())
+    fn save(&self) {
+        if let Err(error) = self.do_save() {
+            self.show_error(error);
+        }
     }
+}
+
+fn save_file(destination_path: &Path, paths: &[PathBuf]) -> io::Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(destination_path)?;
+
+    for path in paths {
+        file.write_all(path.to_str().unwrap().as_bytes())?;
+        file.write_all(b"\n")?;
+    }
+    Ok(())
 }

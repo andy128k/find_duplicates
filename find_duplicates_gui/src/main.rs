@@ -1,4 +1,3 @@
-mod action_name;
 mod application;
 mod duplicates_list;
 mod exclusion;

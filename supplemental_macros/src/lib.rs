@@ -1,11 +1,12 @@
 extern crate proc_macro;
 
+mod action_map;
 mod downgrade_enum;
 mod downgrade_fields;
 mod downgrade_struct;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, Data, DeriveInput};
+use syn::{parse_macro_input, Data, DeriveInput, ItemImpl};
 
 #[proc_macro_derive(GlibDowngrade)]
 pub fn newtype_gobject(input: TokenStream) -> TokenStream {
@@ -19,4 +20,10 @@ pub fn newtype_gobject(input: TokenStream) -> TokenStream {
             panic!("#[derive(GlibDowngrade)] is not available for unions.");
         }
     }
+}
+
+#[proc_macro_attribute]
+pub fn actions(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemImpl);
+    action_map::actions(input).unwrap_or_else(|err| err)
 }
