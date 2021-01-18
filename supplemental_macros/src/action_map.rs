@@ -1,17 +1,16 @@
 use darling::FromMeta;
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use quote::{quote, quote_spanned};
 use syn::{
     parse, spanned::Spanned, Attribute, Error, FnArg, Ident, ImplItem, ImplItemMethod, ItemImpl,
-    Meta, MetaList, NestedMeta, Signature,
+    Meta, MetaList, NestedMeta, PatType, Signature, Type,
 };
 
 #[derive(Debug, Default, FromMeta)]
 #[darling(default)]
 struct ActionAttributes {
     name: Option<String>,
-    parameter_type: Option<String>,
 }
 
 #[derive(Debug)]
@@ -20,8 +19,8 @@ struct ActionInfo {
     sig: Signature,
 }
 
-fn generate_action(action_name: &str, method: &Ident) -> TokenStream2 {
-    quote! {
+fn generate_action(span: Span, action_name: &str, method: &Ident) -> TokenStream2 {
+    quote_spanned! { span =>
         {
             let action = gio::SimpleAction::new(#action_name, None);
             action.connect_activate(
@@ -35,14 +34,15 @@ fn generate_action(action_name: &str, method: &Ident) -> TokenStream2 {
 }
 
 fn generate_action_with_parameter(
+    span: Span,
     action_name: &str,
     method: &Ident,
-    parameter_type: &str,
+    parameter_type: &Type,
 ) -> TokenStream2 {
-    quote! {
+    quote_spanned! { span =>
         {
-            let parameter_type = glib::VariantTy::new(#parameter_type).expect("Parameter type must be a valid Variant type.");
-            let action = gio::SimpleAction::new(#action_name, Some(parameter_type));
+            let parameter_type = <#parameter_type as glib::variant::StaticVariantType>::static_variant_type();
+            let action = gio::SimpleAction::new(#action_name, Some(&*parameter_type));
             action.connect_activate(
                 glib::clone!(@weak self as this => move |_action, parameter| {
                     let parameter = match parameter {
@@ -88,13 +88,13 @@ fn generate_action_for_method(info: ActionInfo) -> Result<TokenStream2, Error> {
         .map_or_else(|| method.to_string(), |name| name.clone());
 
     match info.sig.inputs.len() {
-        1 => Ok(generate_action(&action_name, method)),
+        1 => Ok(generate_action(info.sig.span(), &action_name, method)),
         2 => {
-            let parameter_type = info.attrs.parameter_type.as_ref().ok_or_else(|| Error::new(
-                info.sig.span(),
-                "Action with a parameter must specify parameter's type. E.g `#[action(parameter_type = \"s\")]`. See also `glib_sys::GVariantType`.",
-            ))?;
-            Ok(generate_action_with_parameter(&action_name, method, parameter_type))
+            let parameter_type = match &info.sig.inputs[1] {
+                FnArg::Typed(PatType { ty, .. }) => ty,
+                _ => return Err(Error::new(info.sig.span(), "Cannot extract type of a parameter")),
+            };
+            Ok(generate_action_with_parameter(info.sig.span(), &action_name, method, parameter_type))
         },
         n => Err(Error::new(
             info.sig.span(),

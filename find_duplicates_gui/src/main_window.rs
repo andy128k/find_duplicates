@@ -456,7 +456,6 @@ impl MainWindow {
         }
     }
 
-    #[action(parameter_type = "b")]
     fn select_wildcard(&self, select: bool) {
         let private = self.get_private();
         if private.widgets.duplicates.is_empty() {
@@ -497,7 +496,6 @@ impl MainWindow {
         }
     }
 
-    #[action(parameter_type = "s")]
     fn select_all_but(&self, which: String) {
         fn find_row_to_unselect<'i>(
             model: &duplicates_list::DuplicatesStore,
