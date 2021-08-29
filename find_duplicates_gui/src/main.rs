@@ -5,7 +5,6 @@ mod find_duplicates;
 mod main_window;
 mod options;
 mod path_choose;
-mod phantom_data_weak;
 mod string_list;
 mod user_interaction;
 mod utils;

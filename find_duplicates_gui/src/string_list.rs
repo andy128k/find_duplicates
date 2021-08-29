@@ -1,6 +1,6 @@
-use crate::phantom_data_weak::PhantomData;
 use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
+use std::marker::PhantomData;
 
 #[derive(Clone, glib::Downgrade)]
 pub struct StringList<T>(gtk::ScrolledWindow, PhantomData<T>);
@@ -37,7 +37,7 @@ impl<T> StringList<T> {
 
         scrolled_window.add(&view);
 
-        Self(scrolled_window, PhantomData::new())
+        Self(scrolled_window, PhantomData)
     }
 
     pub fn get_widget(&self) -> gtk::Widget {
