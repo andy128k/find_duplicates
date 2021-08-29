@@ -2,20 +2,20 @@ use crate::phantom_data_weak::PhantomData;
 use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 
-#[derive(Clone, supplemental_macros::GlibDowngrade)]
+#[derive(Clone, glib::Downgrade)]
 pub struct StringList<T>(gtk::ScrolledWindow, PhantomData<T>);
 
 impl<T> StringList<T> {
     pub fn new() -> Self {
-        let model = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
+        let model = gtk::ListStore::new(&[glib::Type::STRING, glib::Type::STRING]);
 
-        let view = gtk::TreeViewBuilder::new()
+        let view = gtk::TreeView::builder()
             .can_focus(true)
             .expand(true)
             .headers_visible(false)
             .model(&model)
             .build();
-        view.get_selection().set_mode(gtk::SelectionMode::Multiple);
+        view.selection().set_mode(gtk::SelectionMode::Multiple);
 
         let column = gtk::TreeViewColumn::new();
         column.set_sizing(gtk::TreeViewColumnSizing::Autosize);
@@ -27,7 +27,7 @@ impl<T> StringList<T> {
 
         view.append_column(&column);
 
-        let scrolled_window = gtk::ScrolledWindowBuilder::new()
+        let scrolled_window = gtk::ScrolledWindow::builder()
             .can_focus(true)
             .hscrollbar_policy(gtk::PolicyType::Automatic)
             .vscrollbar_policy(gtk::PolicyType::Automatic)
@@ -45,11 +45,11 @@ impl<T> StringList<T> {
     }
 
     fn get_view(&self) -> gtk::TreeView {
-        self.0.get_child().unwrap().downcast().unwrap()
+        self.0.child().unwrap().downcast().unwrap()
     }
 
     fn get_model(&self) -> gtk::ListStore {
-        self.get_view().get_model().unwrap().downcast().unwrap()
+        self.get_view().model().unwrap().downcast().unwrap()
     }
 
     pub fn clear(&self) {
@@ -77,7 +77,7 @@ impl<T: ToString + Serialize + DeserializeOwned> StringList<T> {
     pub fn to_vec(&self) -> Vec<T> {
         let mut result: Vec<T> = Vec::new();
         self.get_model().foreach(|model, _path, iter| {
-            let hex: String = model.get_value(iter, 1).get().unwrap().unwrap();
+            let hex: String = model.value(iter, 1).get().unwrap();
             let bytes = hex::decode(&hex).unwrap();
             let value = bincode::deserialize(&bytes).expect("Bincode deserializes value");
             result.push(value);
@@ -88,15 +88,15 @@ impl<T: ToString + Serialize + DeserializeOwned> StringList<T> {
 }
 
 fn remove_selection(view: &gtk::TreeView, store: &gtk::ListStore) {
-    let (selected, model) = view.get_selection().get_selected_rows();
+    let (selected, model) = view.selection().selected_rows();
     let row_refs: Vec<gtk::TreeRowReference> = selected
         .into_iter()
         .filter_map(|path| gtk::TreeRowReference::new(&model, &path))
         .collect();
 
     for row_ref in row_refs {
-        if let Some(path) = row_ref.get_path() {
-            if let Some(iter) = model.get_iter(&path) {
+        if let Some(path) = row_ref.path() {
+            if let Some(iter) = model.iter(&path) {
                 store.remove(&iter);
             }
         }

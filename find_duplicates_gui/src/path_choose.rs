@@ -2,7 +2,7 @@ use gtk::prelude::*;
 use std::path::{Path, PathBuf};
 
 pub fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
-    let dlg = gtk::FileChooserDialogBuilder::new()
+    let dlg = gtk::FileChooserDialog::builder()
         .transient_for(parent)
         .local_only(true)
         .border_width(5)
@@ -21,7 +21,7 @@ pub fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
     dlg.select_filename(pwd);
 
     let result = match dlg.run() {
-        gtk::ResponseType::Accept => dlg.get_filename(),
+        gtk::ResponseType::Accept => dlg.filename(),
         _ => None,
     };
 
@@ -31,7 +31,7 @@ pub fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
 }
 
 pub fn save_as(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
-    let dlg = gtk::FileChooserDialogBuilder::new()
+    let dlg = gtk::FileChooserDialog::builder()
         .transient_for(parent)
         .local_only(true)
         .border_width(5)
@@ -50,7 +50,7 @@ pub fn save_as(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
     dlg.set_current_folder(pwd);
 
     let result = match dlg.run() {
-        gtk::ResponseType::Accept => dlg.get_filename(),
+        gtk::ResponseType::Accept => dlg.filename(),
         _ => None,
     };
 

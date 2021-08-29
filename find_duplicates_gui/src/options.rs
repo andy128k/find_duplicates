@@ -19,7 +19,7 @@ impl ToString for Directory {
 }
 
 fn form_label(label: &str) -> gtk::Label {
-    gtk::LabelBuilder::new()
+    gtk::Label::builder()
         .label(label)
         .justify(gtk::Justification::Left)
         .wrap(false)
@@ -41,7 +41,7 @@ pub struct Options {
 
 fn get_window(widget: &impl IsA<gtk::Widget>) -> Option<gtk::Window> {
     widget
-        .get_toplevel()
+        .toplevel()
         .and_then(|w| w.downcast::<gtk::Window>().ok())
 }
 
@@ -63,7 +63,7 @@ fn pick_pattern(widget: &impl IsA<gtk::Widget>) -> Option<String> {
 }
 
 fn add_directory_button(string_list: &StringList<Directory>) -> gtk::Button {
-    let button = gtk::ButtonBuilder::new()
+    let button = gtk::Button::builder()
         .label("Add directory")
         .hexpand(false)
         .build();
@@ -76,7 +76,7 @@ fn add_directory_button(string_list: &StringList<Directory>) -> gtk::Button {
 }
 
 fn add_excluded_directory_button(string_list: &StringList<Exclusion>) -> gtk::Button {
-    let button = gtk::ButtonBuilder::new()
+    let button = gtk::Button::builder()
         .label("Add directory")
         .hexpand(false)
         .build();
@@ -89,7 +89,7 @@ fn add_excluded_directory_button(string_list: &StringList<Exclusion>) -> gtk::Bu
 }
 
 fn add_exclusion_pattern_button(string_list: &StringList<Exclusion>) -> gtk::Button {
-    let button = gtk::ButtonBuilder::new()
+    let button = gtk::Button::builder()
         .label("Add pattern")
         .hexpand(false)
         .build();
@@ -102,7 +102,7 @@ fn add_exclusion_pattern_button(string_list: &StringList<Exclusion>) -> gtk::But
 }
 
 fn remove_selection_button<T: 'static>(string_list: &StringList<T>) -> gtk::Button {
-    let button = gtk::ButtonBuilder::new()
+    let button = gtk::Button::builder()
         .label("Remove")
         .hexpand(false)
         .build();
@@ -113,10 +113,7 @@ fn remove_selection_button<T: 'static>(string_list: &StringList<T>) -> gtk::Butt
 }
 
 fn clear_button<T: 'static>(string_list: &StringList<T>) -> gtk::Button {
-    let button = gtk::ButtonBuilder::new()
-        .label("Clear")
-        .hexpand(false)
-        .build();
+    let button = gtk::Button::builder().label("Clear").hexpand(false).build();
     button.connect_clicked(clone!(@weak string_list => move |_|
         string_list.clear()
     ));
@@ -124,7 +121,7 @@ fn clear_button<T: 'static>(string_list: &StringList<T>) -> gtk::Button {
 }
 
 fn button_column(buttons: &[gtk::Button]) -> gtk::Widget {
-    let container = gtk::BoxBuilder::new()
+    let container = gtk::Box::builder()
         .homogeneous(false)
         .orientation(gtk::Orientation::Vertical)
         .spacing(8)
@@ -139,7 +136,7 @@ fn button_column(buttons: &[gtk::Button]) -> gtk::Widget {
 
 impl Options {
     pub fn new() -> Self {
-        let container = gtk::GridBuilder::new()
+        let container = gtk::Grid::builder()
             .column_homogeneous(false)
             .row_homogeneous(false)
             .column_spacing(8)
@@ -149,7 +146,7 @@ impl Options {
         let directories_label = form_label("Directories to search");
         container.attach(&directories_label, 0, 0, 3, 1);
 
-        let directories_container = gtk::BoxBuilder::new()
+        let directories_container = gtk::Box::builder()
             .homogeneous(false)
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
@@ -181,7 +178,7 @@ impl Options {
         ]);
         container.attach(&excluded_buttons, 2, 3, 1, 1);
 
-        let recurse = gtk::CheckButtonBuilder::new()
+        let recurse = gtk::CheckButton::builder()
             .label("recurse?")
             .active(true)
             .build();
@@ -191,7 +188,7 @@ impl Options {
         let min_size_label = form_label("Minimum file size:");
         container.attach(&min_size_label, 0, 5, 1, 1);
 
-        let min_size = gtk::EntryBuilder::new()
+        let min_size = gtk::Entry::builder()
             .tooltip_text("Using find -size syntax")
             .text("1")
             .hexpand(true)
@@ -232,10 +229,10 @@ impl Options {
     }
 
     pub fn get_recurse(&self) -> bool {
-        self.recurse.get_active()
+        self.recurse.is_active()
     }
 
     pub fn get_min_size(&self) -> u64 {
-        u64::from_str_radix(&self.min_size.get_text(), 10).unwrap_or_default()
+        u64::from_str_radix(&self.min_size.text(), 10).unwrap_or_default()
     }
 }

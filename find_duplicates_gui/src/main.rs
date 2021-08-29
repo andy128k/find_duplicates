@@ -15,7 +15,6 @@ mod widgets;
 use gio::prelude::*;
 
 fn main() {
-    let args = std::env::args().collect();
-    let exit_status = application::create_application().run(&[args]);
+    let exit_status = application::create_application().run();
     std::process::exit(exit_status);
 }

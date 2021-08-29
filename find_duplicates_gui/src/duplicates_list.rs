@@ -23,19 +23,19 @@ enum StoreColumn {
 impl DuplicatesStore {
     pub fn new() -> Self {
         Self(gtk::ListStore::new(&[
-            glib::Type::Bool,   // IsGroup
-            glib::Type::String, // Name
-            glib::Type::String, // Directory
-            glib::Type::String, // Time
-            glib::Type::String, // Size
-            glib::Type::String, // Path
-            glib::Type::String, // Modified
-            glib::Type::String, // Background
+            glib::Type::BOOL,   // IsGroup
+            glib::Type::STRING, // Name
+            glib::Type::STRING, // Directory
+            glib::Type::STRING, // Time
+            glib::Type::STRING, // Size
+            glib::Type::STRING, // Path
+            glib::Type::STRING, // Modified
+            glib::Type::STRING, // Background
         ]))
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.get_iter_first().is_none()
+        self.0.iter_first().is_none()
     }
 
     pub fn append_group(&self, group_size: usize, file_size: u64) {
@@ -120,28 +120,22 @@ impl DuplicatesStore {
     }
 
     pub fn get_fs_path(&self, iter: &gtk::TreeIter) -> Option<PathBuf> {
-        let path: String = self
-            .0
-            .get_value(iter, StoreColumn::Path as i32)
-            .get()
-            .ok()??;
+        let path: String = self.0.value(iter, StoreColumn::Path as i32).get().ok()?;
         Some(Path::new(&path).to_path_buf())
     }
 
     pub fn is_group(&self, iter: &gtk::TreeIter) -> bool {
         self.0
-            .get_value(iter, StoreColumn::IsGroup as i32)
+            .value(iter, StoreColumn::IsGroup as i32)
             .get()
-            .unwrap()
             .unwrap()
     }
 
     pub fn modified(&self, iter: &gtk::TreeIter) -> DateTime<Local> {
         let s: String = self
             .0
-            .get_value(iter, StoreColumn::Modified as i32)
+            .value(iter, StoreColumn::Modified as i32)
             .get()
-            .unwrap()
             .unwrap();
         DateTime::parse_from_rfc3339(&s)
             .unwrap()
@@ -157,7 +151,7 @@ impl DuplicatesStore {
     }
 
     pub fn iter(&self) -> DuplicatesStoreIter {
-        let iter = self.0.get_iter_first();
+        let iter = self.0.iter_first();
         DuplicatesStoreIter {
             store: self.clone(),
             iter,
@@ -172,7 +166,7 @@ impl DuplicatesStore {
     }
 
     pub fn get_ref(&self, iter: &gtk::TreeIter) -> Option<gtk::TreeRowReference> {
-        let path = self.0.get_path(iter)?;
+        let path = self.0.path(iter)?;
         gtk::TreeRowReference::new(&self.0, &path)
     }
 
@@ -181,8 +175,8 @@ impl DuplicatesStore {
             iters.iter().filter_map(|iter| self.get_ref(iter)).collect();
 
         for row_ref in to_remove {
-            if let Some(path) = row_ref.get_path() {
-                if let Some(iter) = self.0.get_iter(&path) {
+            if let Some(path) = row_ref.path() {
+                if let Some(iter) = self.0.iter(&path) {
                     self.0.remove(&iter);
                 }
             }
@@ -274,7 +268,7 @@ pub struct DuplicatesList {
 
 impl DuplicatesList {
     pub fn new(model: &DuplicatesStore) -> Self {
-        let tree_view = gtk::TreeViewBuilder::new()
+        let tree_view = gtk::TreeView::builder()
             .can_focus(true)
             .expand(true)
             .headers_visible(true)
@@ -326,21 +320,20 @@ impl DuplicatesList {
             tree_view.append_column(&column1);
         }
 
-        let selection = tree_view.get_selection();
+        let selection = tree_view.selection();
         selection.set_mode(gtk::SelectionMode::Multiple);
         selection.set_select_function(Some(Box::new(
             |_selection, model: &gtk::TreeModel, path, _selected| {
-                let iter = model.get_iter(path).unwrap();
+                let iter = model.iter(path).unwrap();
                 let is_group: bool = model
-                    .get_value(&iter, StoreColumn::IsGroup as i32)
+                    .value(&iter, StoreColumn::IsGroup as i32)
                     .get()
-                    .unwrap()
                     .unwrap();
                 !is_group
             },
         )));
 
-        let scrolled_window = gtk::ScrolledWindowBuilder::new()
+        let scrolled_window = gtk::ScrolledWindow::builder()
             .can_focus(true)
             .hscrollbar_policy(gtk::PolicyType::Automatic)
             .vscrollbar_policy(gtk::PolicyType::Automatic)
@@ -358,17 +351,17 @@ impl DuplicatesList {
 
     pub fn set_popup(&self, popup_model: &gio::MenuModel) {
         let popup = gtk::Menu::from_model(popup_model);
-        popup.set_property_attach_widget(Some(&self.tree_view));
+        popup.set_attach_widget(Some(&self.tree_view));
 
         self.tree_view.connect_button_press_event(
             clone!(@weak popup => @default-return Inhibit(false), move |view, event| {
                 const GDK_BUTTON_SECONDARY: u32 = 3;
-                let button = event.get_button();
+                let button = event.button();
                 if button == GDK_BUTTON_SECONDARY {
                     view.grab_focus();
 
-                    let (x, y) = event.get_position();
-                    if let Some((Some(path), _, _, _)) = view.get_path_at_pos(x as i32, y as i32) {
+                    let (x, y) = event.position();
+                    if let Some((Some(path), _, _, _)) = view.path_at_pos(x as i32, y as i32) {
                         view.set_cursor(&path, None::<&gtk::TreeViewColumn>, false);
                     }
 
@@ -395,14 +388,14 @@ impl DuplicatesList {
     }
 
     pub fn get_selection(&self) -> gtk::TreeSelection {
-        self.tree_view.get_selection()
+        self.tree_view.selection()
     }
 
     pub fn get_selected_iters(&self) -> Vec<gtk::TreeIter> {
-        let (selected, model) = self.tree_view.get_selection().get_selected_rows();
+        let (selected, model) = self.tree_view.selection().selected_rows();
         selected
             .into_iter()
-            .filter_map(|tree_path| model.get_iter(&tree_path))
+            .filter_map(|tree_path| model.iter(&tree_path))
             .collect()
     }
 

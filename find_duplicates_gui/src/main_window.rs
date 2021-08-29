@@ -25,7 +25,7 @@ fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn action_buttons() -> gtk::Widget {
-    let row = gtk::ButtonBoxBuilder::new()
+    let row = gtk::ButtonBox::builder()
         .homogeneous(false)
         .spacing(8)
         .margin(8)
@@ -33,13 +33,13 @@ fn action_buttons() -> gtk::Widget {
         .layout_style(gtk::ButtonBoxStyle::End)
         .build();
 
-    let del = gtk::ButtonBuilder::new()
+    let del = gtk::Button::builder()
         .label("Delete")
         .action_name("win.delete")
         .build();
     row.pack_end(&del, false, false, 1);
 
-    let save = gtk::ButtonBuilder::new()
+    let save = gtk::Button::builder()
         .label("Save")
         .tooltip_text("Save (selected) list to file")
         .action_name("win.save")
@@ -59,7 +59,7 @@ fn action_buttons() -> gtk::Widget {
         .item("Toggle selection", "win.select_toggle")
         .item("Unselect all", "win.unselect_all");
 
-    let select = gtk::MenuButtonBuilder::new()
+    let select = gtk::MenuButton::builder()
         .label("Select")
         .menu_model(&menu)
         .use_popover(false)
@@ -71,7 +71,7 @@ fn action_buttons() -> gtk::Widget {
 }
 
 fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
-    let b = gtk::GridBuilder::new()
+    let b = gtk::Grid::builder()
         .column_homogeneous(false)
         .row_homogeneous(false)
         .row_spacing(16)
@@ -93,7 +93,7 @@ fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
 }
 
 fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
-    let b = gtk::BoxBuilder::new()
+    let b = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .homogeneous(false)
         .build();
@@ -124,7 +124,7 @@ fn create_app_window(
     application: &gtk::Application,
     builder: &mut AppWidgetsBuilder,
 ) -> MainWindow {
-    let window = gtk::ApplicationWindowBuilder::new()
+    let window = gtk::ApplicationWindow::builder()
         .application(application)
         .type_(gtk::WindowType::Toplevel)
         .window_position(gtk::WindowPosition::Center)
@@ -133,13 +133,13 @@ fn create_app_window(
         .resizable(true)
         .build();
 
-    let headerbar = gtk::HeaderBarBuilder::new()
+    let headerbar = gtk::HeaderBar::builder()
         .show_close_button(true)
         .title("Find duplicates")
         .build();
     window.set_titlebar(Some(&headerbar));
 
-    let paned = gtk::PanedBuilder::new().build();
+    let paned = gtk::Paned::builder().build();
 
     paned.pack1(&parameters(builder), false, false);
     paned.pack2(&results(builder), true, false);
@@ -158,7 +158,7 @@ struct AppWidgets {
     view: duplicates_list::DuplicatesList,
 }
 
-#[derive(supplemental_macros::GlibDowngrade)]
+#[derive(glib::Downgrade)]
 pub struct MainWindow(gtk::ApplicationWindow);
 
 pub struct MainWindowPrivate {
@@ -203,7 +203,13 @@ impl MainWindow {
     }
 
     fn get_private(&self) -> &MainWindowPrivate {
-        unsafe { self.0.get_data::<MainWindowPrivate>("private").unwrap() }
+        unsafe {
+            &*self
+                .0
+                .data::<MainWindowPrivate>("private")
+                .unwrap()
+                .as_ptr()
+        }
     }
 
     pub fn add_directory(&self, directory: &Path) {
@@ -374,7 +380,7 @@ impl MainWindow {
     }
 }
 
-#[supplemental_macros::actions]
+#[awesome_glib::actions]
 impl MainWindow {
     fn find(&self) {
         let private = self.get_private();
