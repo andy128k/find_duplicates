@@ -16,6 +16,7 @@ chrono = "0.4"
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 hex = "0.4"
+humansize = "1"
 
 sha2 = "0.9"
 generic-array = "0.14"

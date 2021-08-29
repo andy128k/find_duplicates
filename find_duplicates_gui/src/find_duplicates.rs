@@ -1,6 +1,6 @@
 use crate::exclusion::Exclusion;
-use crate::format_number::human_num_decimal;
 use generic_array::GenericArray;
+use humansize::{file_size_opts::DECIMAL, FileSize};
 use lazy_static::lazy_static;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -230,8 +230,8 @@ pub fn duplication_status(dups: &[DuplicatesGroup]) -> String {
     }
 
     format!(
-        "{}B wasted in {} files (in {} groups)",
-        human_num_decimal(waste_bytes),
+        "{} wasted in {} files (in {} groups)",
+        waste_bytes.file_size(DECIMAL).unwrap(),
         waste_count,
         dups.len()
     )
