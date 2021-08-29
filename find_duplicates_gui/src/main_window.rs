@@ -70,35 +70,38 @@ fn action_buttons() -> gtk::Widget {
     row.upcast()
 }
 
-fn parameters(builder: &mut AppWidgetsBuilder) -> gtk::Widget {
-    let b = gtk::Grid::builder()
+fn sidebar_layout(child: &gtk::Widget, action: &gtk::Button) -> gtk::Widget {
+    let grid = gtk::Grid::builder()
         .column_homogeneous(false)
         .row_homogeneous(false)
         .row_spacing(16)
         .margin(8)
         .build();
-
-    let options = options::Options::new();
-    b.attach(&options.get_widget(), 0, 0, 2, 1);
-
-    b.attach(&horizontal_expander(), 0, 1, 1, 1);
-
-    let find = go_button("Find");
-    find.set_action_name(Some("win.find"));
-    b.attach(&find, 1, 1, 1, 1);
-
-    builder.options(options);
-
-    b.upcast()
+    grid.attach(child, 0, 0, 2, 1);
+    grid.attach(&horizontal_expander(), 0, 1, 1, 1);
+    grid.attach(action, 1, 1, 1, 1);
+    grid.upcast()
 }
 
-fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
-    let b = gtk::Box::builder()
+fn results_layout(top: &gtk::Widget, bottom: &gtk::Widget) -> gtk::Widget {
+    let bx = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .homogeneous(false)
         .build();
+    bx.pack_start(top, true, true, 0);
+    bx.pack_start(bottom, false, false, 0);
+    bx.upcast()
+}
 
-    let menu = gio::Menu::new()
+fn panes(sidebar: &gtk::Widget, main: &gtk::Widget) -> gtk::Widget {
+    let paned = gtk::Paned::builder().build();
+    paned.pack1(sidebar, false, false);
+    paned.pack2(main, true, false);
+    paned.upcast()
+}
+
+fn duplicates_popup() -> gio::Menu {
+    gio::Menu::new()
         .item("Open", "win.open")
         .item("Open directory", "win.open_directory")
         .item("Copy", "win.copy")
@@ -106,96 +109,87 @@ fn results(builder: &mut AppWidgetsBuilder) -> gtk::Box {
         .item(
             "Select all in this directory",
             "win.select_from_same_directory",
-        );
-
-    let dups = duplicates_list::DuplicatesList::new(builder.duplicates.as_ref().unwrap());
-    dups.set_popup(&menu.upcast());
-    b.pack_start(&dups.get_widget(), true, true, 0);
-
-    let all_buttons = action_buttons();
-    b.pack_start(&all_buttons, false, false, 0);
-
-    builder.view(dups);
-
-    b
-}
-
-fn create_app_window(
-    application: &gtk::Application,
-    builder: &mut AppWidgetsBuilder,
-) -> MainWindow {
-    let window = gtk::ApplicationWindow::builder()
-        .application(application)
-        .type_(gtk::WindowType::Toplevel)
-        .window_position(gtk::WindowPosition::Center)
-        .default_width(1200)
-        .default_height(800)
-        .resizable(true)
-        .build();
-
-    let headerbar = gtk::HeaderBar::builder()
-        .show_close_button(true)
-        .title("Find duplicates")
-        .build();
-    window.set_titlebar(Some(&headerbar));
-
-    let paned = gtk::Paned::builder().build();
-
-    paned.pack1(&parameters(builder), false, false);
-    paned.pack2(&results(builder), true, false);
-
-    window.add(&paned);
-
-    MainWindow(window)
+        )
 }
 
 type FindResult = Result<Vec<DuplicatesGroup>, String>;
-
-#[derive(derive_builder::Builder)]
-struct AppWidgets {
-    duplicates: duplicates_list::DuplicatesStore,
-    options: options::Options,
-    view: duplicates_list::DuplicatesList,
-}
 
 #[derive(glib::Downgrade)]
 pub struct MainWindow(gtk::ApplicationWindow);
 
 pub struct MainWindowPrivate {
     confirm_delete: Cell<bool>,
-    widgets: AppWidgets,
+    duplicates: duplicates_list::DuplicatesStore,
+    options: options::Options,
+    view: duplicates_list::DuplicatesList,
 
     find_sender: glib::Sender<FindResult>,
     progress: RefCell<Option<gtk::Dialog>>,
 }
 
 impl MainWindow {
-    pub fn new(application: &gtk::Application) -> MainWindow {
-        let mut widgets_builder = AppWidgetsBuilder::default();
-        widgets_builder.duplicates(duplicates_list::DuplicatesStore::new());
+    fn new_internal(window: gtk::ApplicationWindow, private: MainWindowPrivate) -> Self {
+        unsafe {
+            window.set_data::<MainWindowPrivate>("private", private);
+        }
+        Self(window)
+    }
 
-        let window = create_app_window(application, &mut widgets_builder);
+    pub fn new(application: &gtk::Application) -> Self {
+        let window = gtk::ApplicationWindow::builder()
+            .application(application)
+            .type_(gtk::WindowType::Toplevel)
+            .window_position(gtk::WindowPosition::Center)
+            .default_width(1200)
+            .default_height(800)
+            .resizable(true)
+            .build();
+
+        let headerbar = gtk::HeaderBar::builder()
+            .show_close_button(true)
+            .title("Find duplicates")
+            .build();
+        window.set_titlebar(Some(&headerbar));
+
+        let options = options::Options::new();
+
+        let menu = duplicates_popup();
+
+        let duplicates = duplicates_list::DuplicatesStore::new();
+        let view = duplicates_list::DuplicatesList::new(&duplicates);
+        view.set_popup(&menu.upcast());
+
+        let action_buttons = action_buttons();
+
+        let paned = panes(
+            &sidebar_layout(&options.get_widget(), &go_button("Find", "win.find")),
+            &results_layout(&view.get_widget(), &action_buttons),
+        );
+
+        window.add(&paned);
 
         let (find_sender, find_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
-        let private = MainWindowPrivate {
-            confirm_delete: Cell::new(true),
-            widgets: widgets_builder.build().unwrap(),
-            find_sender,
-            progress: RefCell::new(None),
-        };
-        unsafe {
-            window.0.set_data::<MainWindowPrivate>("private", private);
-        }
+        let main_window = MainWindow::new_internal(
+            window,
+            MainWindowPrivate {
+                confirm_delete: Cell::new(true),
+                duplicates,
+                options,
+                view,
+                find_sender,
+                progress: RefCell::new(None),
+            },
+        );
 
-        window.register_actions(&window.0);
-        find_receiver.attach(None, clone!(@weak window => @default-return glib::Continue(false), move |msg| window.on_find_finished(msg)));
+        main_window.register_actions(&main_window.0);
+        find_receiver.attach(None, clone!(@weak main_window => @default-return glib::Continue(false), move |msg| main_window.on_find_finished(msg)));
 
         for ignore in DEFAULT_EXCLUDE_PATTERNS.iter() {
-            window.add_excluded(ignore.clone());
+            main_window.add_excluded(ignore.clone());
         }
 
-        window
+        main_window
     }
 
     pub fn show_all(&self) {
@@ -214,12 +208,12 @@ impl MainWindow {
 
     pub fn add_directory(&self, directory: &Path) {
         let private = self.get_private();
-        private.widgets.options.add_directory(directory);
+        private.options.add_directory(directory);
     }
 
     fn add_excluded(&self, excluded: Exclusion) {
         let private = self.get_private();
-        private.widgets.options.add_excluded(excluded);
+        private.options.add_excluded(excluded);
     }
 
     fn on_find_finished(&self, msg: FindResult) -> glib::Continue {
@@ -235,12 +229,10 @@ impl MainWindow {
             Ok(duplicates) => {
                 for group in &duplicates {
                     private
-                        .widgets
                         .duplicates
                         .append_group(group.files.len(), group.size());
                     for fi in &group.files {
                         private
-                            .widgets
                             .duplicates
                             .append_file(&fi.path, fi.modified, fi.size);
                     }
@@ -259,19 +251,18 @@ impl MainWindow {
 
     fn do_save(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
-        let selected = private.widgets.view.get_selected_iters();
+        let selected = private.view.get_selected_iters();
         let to_save: Vec<PathBuf> = if selected.len() > 0 {
             selected
                 .iter()
-                .filter_map(|iter| private.widgets.duplicates.get_fs_path(iter))
+                .filter_map(|iter| private.duplicates.get_fs_path(iter))
                 .collect()
         } else {
             private
-                .widgets
                 .duplicates
                 .group_iter()
                 .flat_map(|(_group, files)| files.into_iter())
-                .filter_map(|iter| private.widgets.duplicates.get_fs_path(&iter))
+                .filter_map(|iter| private.duplicates.get_fs_path(&iter))
                 .collect()
         };
 
@@ -305,14 +296,13 @@ impl MainWindow {
 
     fn get_selected_fs_path(&self) -> Option<PathBuf> {
         let private = self.get_private();
-        let iter = private.widgets.view.get_selected_iter()?;
-        private.widgets.duplicates.get_fs_path(&iter)
+        let iter = private.view.get_selected_iter()?;
+        private.duplicates.get_fs_path(&iter)
     }
 
     fn get_path_and_name(&self, iter: &gtk::TreeIter) -> Result<(PathBuf, String), Box<dyn Error>> {
         let private = self.get_private();
         let path = private
-            .widgets
             .duplicates
             .get_fs_path(&iter)
             .ok_or_else(|| "Cannot get path of the file")?;
@@ -327,7 +317,7 @@ impl MainWindow {
 
     fn do_rename(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
-        let iter = match private.widgets.view.get_selected_iter() {
+        let iter = match private.view.get_selected_iter() {
             Some(iter) => iter,
             None => return Ok(()),
         };
@@ -358,7 +348,7 @@ impl MainWindow {
 
         fs::rename(old_path, &new_path)?;
 
-        private.widgets.duplicates.set_path(&iter, &new_path);
+        private.duplicates.set_path(&iter, &new_path);
 
         Ok(())
     }
@@ -366,7 +356,6 @@ impl MainWindow {
     fn delete_file_by_tree_iter(&self, iter: &gtk::TreeIter) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
         let fs_path = private
-            .widgets
             .duplicates
             .get_fs_path(&iter)
             .ok_or_else(|| "Cannot get path to file by iter.")?;
@@ -385,17 +374,17 @@ impl MainWindow {
     fn find(&self) {
         let private = self.get_private();
 
-        let search_dirs = private.widgets.options.get_directories();
+        let search_dirs = private.options.get_directories();
         if search_dirs.is_empty() {
             self.show_error("No search paths specified");
             return;
         }
-        let excluded = private.widgets.options.get_excluded();
+        let excluded = private.options.get_excluded();
 
-        let min_size: u64 = private.widgets.options.get_min_size();
-        let recurse = private.widgets.options.get_recurse();
+        let min_size: u64 = private.options.get_min_size();
+        let recurse = private.options.get_recurse();
 
-        private.widgets.duplicates.clear();
+        private.duplicates.clear();
 
         let progress = user_interaction::progress(&self.0.clone().upcast(), "Searching...");
         progress.show();
@@ -445,16 +434,15 @@ impl MainWindow {
         let private = self.get_private();
         if let Some(path) = self.get_selected_fs_path() {
             if let Some(dir) = path.parent() {
-                for (_group, files) in private.widgets.duplicates.group_iter() {
+                for (_group, files) in private.duplicates.group_iter() {
                     for file in files {
                         if private
-                            .widgets
                             .duplicates
                             .get_fs_path(&file)
                             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
                             == Some(dir.to_path_buf())
                         {
-                            private.widgets.view.get_selection().select_iter(&file);
+                            private.view.get_selection().select_iter(&file);
                         }
                     }
                 }
@@ -464,7 +452,7 @@ impl MainWindow {
 
     fn select_wildcard(&self, select: bool) {
         let private = self.get_private();
-        if private.widgets.duplicates.is_empty() {
+        if private.duplicates.is_empty() {
             return;
         }
 
@@ -487,10 +475,10 @@ impl MainWindow {
             }
         };
 
-        let selection = private.widgets.view.get_selection();
-        for (_group, files) in private.widgets.duplicates.group_iter() {
+        let selection = private.view.get_selection();
+        for (_group, files) in private.duplicates.group_iter() {
             for file_iter in files {
-                let fs_path = private.widgets.duplicates.get_fs_path(&file_iter).unwrap();
+                let fs_path = private.duplicates.get_fs_path(&file_iter).unwrap();
                 if pattern.matches_path(&fs_path) {
                     if select {
                         selection.select_iter(&file_iter);
@@ -517,14 +505,12 @@ impl MainWindow {
         }
 
         let private = self.get_private();
-        let selection = private.widgets.view.get_selection();
-        for (_group, files) in private.widgets.duplicates.group_iter() {
+        let selection = private.view.get_selection();
+        for (_group, files) in private.duplicates.group_iter() {
             for file in &files {
                 selection.select_iter(file);
             }
-            if let Some(unselect) =
-                find_row_to_unselect(&private.widgets.duplicates, &files, &which)
-            {
+            if let Some(unselect) = find_row_to_unselect(&private.duplicates, &files, &which) {
                 selection.unselect_iter(unselect);
             }
         }
@@ -533,9 +519,9 @@ impl MainWindow {
     fn select_toggle(&self) {
         let private = self.get_private();
 
-        let selection = private.widgets.view.get_selection();
-        for iter in private.widgets.duplicates.iter() {
-            if !private.widgets.duplicates.is_group(&iter) {
+        let selection = private.view.get_selection();
+        for iter in private.duplicates.iter() {
+            if !private.duplicates.is_group(&iter) {
                 if selection.iter_is_selected(&iter) {
                     selection.unselect_iter(&iter);
                 } else {
@@ -547,12 +533,12 @@ impl MainWindow {
 
     fn unselect_all(&self) {
         let private = self.get_private();
-        private.widgets.view.get_selection().unselect_all();
+        private.view.get_selection().unselect_all();
     }
 
     fn delete_selected(&self) {
         let private = self.get_private();
-        let selected = private.widgets.view.get_selected_iters();
+        let selected = private.view.get_selected_iters();
 
         let count = selected.len();
         if count == 0 {
@@ -587,7 +573,7 @@ impl MainWindow {
             }
         }
 
-        private.widgets.duplicates.remove_all(&deleted);
+        private.duplicates.remove_all(&deleted);
 
         if errors.is_empty() {
             user_interaction::notify_info(

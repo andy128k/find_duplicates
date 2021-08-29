@@ -1,7 +1,10 @@
 use gtk::prelude::*;
 
-pub fn go_button(label: &str) -> gtk::Button {
-    let button = gtk::Button::builder().label(label).build();
+pub fn go_button(label: &str, action: &str) -> gtk::Button {
+    let button = gtk::Button::builder()
+        .label(label)
+        .action_name(action)
+        .build();
 
     let style_provider = gtk::CssProvider::new();
     style_provider
