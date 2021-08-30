@@ -2,7 +2,7 @@ use gtk::prelude::*;
 use std::time::Duration;
 
 fn dialog(parent: &gtk::Window, title: &str) -> gtk::Dialog {
-    let dialog = gtk::Dialog::builder()
+    gtk::Dialog::builder()
         .title(title)
         .transient_for(parent)
         .type_(gtk::WindowType::Toplevel)
@@ -16,9 +16,7 @@ fn dialog(parent: &gtk::Window, title: &str) -> gtk::Dialog {
         .focus_on_map(true)
         .urgency_hint(false)
         .use_header_bar(1)
-        .build();
-
-    dialog
+        .build()
 }
 
 pub fn prompt(parent: &gtk::Window, title: &str, message: &str, value: &str) -> Option<String> {

@@ -252,7 +252,7 @@ impl MainWindow {
     fn do_save(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
         let selected = private.view.get_selected_iters();
-        let to_save: Vec<PathBuf> = if selected.len() > 0 {
+        let to_save: Vec<PathBuf> = if !selected.is_empty() {
             selected
                 .iter()
                 .filter_map(|iter| private.duplicates.get_fs_path(iter))
@@ -305,12 +305,12 @@ impl MainWindow {
         let path = private
             .duplicates
             .get_fs_path(&iter)
-            .ok_or_else(|| "Cannot get path of the file")?;
+            .ok_or("Cannot get path of the file")?;
         let name = path
             .file_name()
-            .ok_or_else(|| "Cannot get base name of the file")?
+            .ok_or("Cannot get base name of the file")?
             .to_str()
-            .ok_or_else(|| "Cannot convert file name to string")?
+            .ok_or("Cannot convert file name to string")?
             .to_owned();
         Ok((path, name))
     }
@@ -358,7 +358,7 @@ impl MainWindow {
         let fs_path = private
             .duplicates
             .get_fs_path(&iter)
-            .ok_or_else(|| "Cannot get path to file by iter.")?;
+            .ok_or("Cannot get path to file by iter.")?;
         fs::remove_file(&fs_path)
             .map_err(|e| format!("File {} cannot be removed. {}", fs_path.display(), e))?;
         Ok(())
@@ -583,7 +583,7 @@ impl MainWindow {
         } else {
             let mut error_message = String::from("Following errors happened:\n");
             for error in errors {
-                error_message.push_str("\n");
+                error_message.push('\n');
                 error_message.push_str(&error.to_string());
             }
             user_interaction::notify_detailed(

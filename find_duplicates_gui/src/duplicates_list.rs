@@ -275,50 +275,23 @@ impl DuplicatesList {
             .model(&model.to_model())
             .build();
 
-        {
-            let column1 = gtk::TreeViewColumn::new();
-            column1.set_sizing(gtk::TreeViewColumnSizing::Autosize);
-            column1.set_expand(true);
-            column1.set_title("Name");
-
+        fn column(title: &str, text_column: StoreColumn) -> gtk::TreeViewColumn {
+            let column = gtk::TreeViewColumn::builder()
+                .sizing(gtk::TreeViewColumnSizing::Autosize)
+                .expand(true)
+                .title(title)
+                .build();
             let text = gtk::CellRendererText::new();
-            column1.pack_start(&text, true);
-            column1.add_attribute(&text, "text", StoreColumn::Name as i32);
-            column1.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
-            column1.add_attribute(&text, "background", StoreColumn::Background as i32);
-
-            tree_view.append_column(&column1);
+            column.pack_start(&text, true);
+            column.add_attribute(&text, "text", text_column as i32);
+            column.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
+            column.add_attribute(&text, "background", StoreColumn::Background as i32);
+            column
         }
 
-        {
-            let column1 = gtk::TreeViewColumn::new();
-            column1.set_sizing(gtk::TreeViewColumnSizing::Autosize);
-            column1.set_expand(true);
-            column1.set_title("Directory");
-
-            let text = gtk::CellRendererText::new();
-            column1.pack_start(&text, true);
-            column1.add_attribute(&text, "text", StoreColumn::Directory as i32);
-            column1.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
-            column1.add_attribute(&text, "background", StoreColumn::Background as i32);
-
-            tree_view.append_column(&column1);
-        }
-
-        {
-            let column1 = gtk::TreeViewColumn::new();
-            column1.set_sizing(gtk::TreeViewColumnSizing::Autosize);
-            column1.set_expand(true);
-            column1.set_title("Date");
-
-            let text = gtk::CellRendererText::new();
-            column1.pack_start(&text, true);
-            column1.add_attribute(&text, "text", StoreColumn::Time as i32);
-            column1.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
-            column1.add_attribute(&text, "background", StoreColumn::Background as i32);
-
-            tree_view.append_column(&column1);
-        }
+        tree_view.append_column(&column("Name", StoreColumn::Name));
+        tree_view.append_column(&column("Directory", StoreColumn::Directory));
+        tree_view.append_column(&column("Date", StoreColumn::Time));
 
         let selection = tree_view.selection();
         selection.set_mode(gtk::SelectionMode::Multiple);
@@ -344,8 +317,8 @@ impl DuplicatesList {
         scrolled_window.add(&tree_view);
 
         Self {
-            tree_view,
             scrolled_window,
+            tree_view,
         }
     }
 
