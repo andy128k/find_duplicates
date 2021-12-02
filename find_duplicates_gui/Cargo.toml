@@ -23,4 +23,4 @@ generic-array = "0.14"
 lazy_static = "1"
 
 supplemental_macros = { path = "../supplemental_macros" }
-awesome-glib = { git = "https://github.com/andy128k/awesome-gtk.git" }
+awesome-glib = "0.1.1"
