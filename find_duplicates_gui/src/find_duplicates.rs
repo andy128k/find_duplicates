@@ -1,8 +1,10 @@
 use crate::exclusion::Exclusion;
-use generic_array::GenericArray;
 use humansize::{file_size_opts::DECIMAL, FileSize};
 use lazy_static::lazy_static;
-use sha2::{Digest, Sha256};
+use sha2::{
+    digest::{generic_array::GenericArray, OutputSizeUser},
+    Digest, Sha256,
+};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{self, Metadata};
@@ -89,9 +91,11 @@ fn find_files_in_dirs(
     Ok(files)
 }
 
-fn get_file_hash(fi: &FileInfo) -> io::Result<GenericArray<u8, <Sha256 as Digest>::OutputSize>> {
+fn get_file_hash(
+    fi: &FileInfo,
+) -> io::Result<GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>> {
     lazy_static! {
-        static ref EMPTY_HASH: GenericArray<u8, <Sha256 as Digest>::OutputSize> =
+        static ref EMPTY_HASH: GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize> =
             Sha256::new().finalize();
     }
 
