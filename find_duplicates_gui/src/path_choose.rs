@@ -1,4 +1,4 @@
-use gtk::prelude::*;
+use crate::gtk_prelude::*;
 use std::path::{Path, PathBuf};
 
 pub fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {

@@ -1,3 +1,5 @@
+use crate::gtk_prelude::*;
+
 pub trait MenuBuilderExt {
     fn item(self, label: &str, action: &str) -> Self;
     fn submenu(self, label: &str, submenu: gio::Menu) -> Self;

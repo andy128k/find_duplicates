@@ -1,10 +1,9 @@
 use crate::exclusion::Exclusion;
+use crate::gtk_prelude::*;
 use crate::path_choose::select_dir;
 use crate::string_list::StringList;
 use crate::user_interaction::prompt;
 use crate::utils::horizontal_expander;
-use glib::{clone, IsA};
-use gtk::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::string::ToString;

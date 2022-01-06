@@ -5,9 +5,6 @@ authors = ["Andrey Kutejko <andy128k@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-glib = "0.14"
-gio = "0.14"
-gdk = "0.14"
 gtk = { version = "0.14", features = ["v3_22"] }
 
 glob = "0.3"

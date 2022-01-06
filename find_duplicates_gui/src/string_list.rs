@@ -1,4 +1,4 @@
-use gtk::prelude::*;
+use crate::gtk_prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 

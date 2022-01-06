@@ -1,4 +1,4 @@
-use gtk::prelude::*;
+use crate::gtk_prelude::*;
 use std::time::Duration;
 
 fn dialog(parent: &gtk::Window, title: &str) -> gtk::Dialog {

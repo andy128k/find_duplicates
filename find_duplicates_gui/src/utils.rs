@@ -1,4 +1,4 @@
-use gtk::prelude::*;
+use crate::gtk_prelude::*;
 
 pub fn horizontal_expander() -> gtk::Widget {
     gtk::DrawingArea::builder()

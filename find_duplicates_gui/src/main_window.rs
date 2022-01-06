@@ -1,15 +1,13 @@
 use crate::duplicates_list;
 use crate::exclusion::{Exclusion, DEFAULT_EXCLUDE_PATTERNS};
 use crate::find_duplicates::{duplication_status, find_duplicate_groups, DuplicatesGroup};
+use crate::gtk_prelude::*;
 use crate::options;
 use crate::path_choose;
 use crate::user_interaction;
 use crate::utils::horizontal_expander;
 use crate::widgets::go_button::go_button;
 use crate::widgets::menu_builder::MenuBuilderExt;
-use gio::prelude::*;
-use glib::clone;
-use gtk::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::env;
 use std::error::Error;

@@ -1,5 +1,5 @@
+use crate::gtk_prelude::*;
 use crate::main_window::MainWindow;
-use gio::prelude::*;
 
 pub fn create_application() -> gtk::Application {
     let app = gtk::Application::builder()

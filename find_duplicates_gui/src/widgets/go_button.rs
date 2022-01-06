@@ -1,4 +1,4 @@
-use gtk::prelude::*;
+use crate::gtk_prelude::*;
 
 pub fn go_button(label: &str, action: &str) -> gtk::Button {
     let button = gtk::Button::builder()
