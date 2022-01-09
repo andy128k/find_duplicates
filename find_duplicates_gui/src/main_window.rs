@@ -534,7 +534,7 @@ impl MainWindow {
         private.view.get_selection().unselect_all();
     }
 
-    fn delete_selected(&self) {
+    fn delete(&self) {
         let private = self.get_private();
         let selected = private.view.get_selected_iters();
 
