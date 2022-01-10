@@ -1,7 +1,8 @@
 use crate::gtk_prelude::*;
+use crate::utils::pending;
 use std::path::{Path, PathBuf};
 
-pub fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
+pub async fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
     let dlg = gtk::FileChooserDialog::builder()
         .transient_for(parent)
         .local_only(true)
@@ -20,17 +21,18 @@ pub fn select_dir(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
 
     dlg.select_filename(pwd);
 
-    let result = match dlg.run() {
+    let result = match dlg.run_future().await {
         gtk::ResponseType::Accept => dlg.filename(),
         _ => None,
     };
 
     dlg.close();
+    pending().await;
 
     result
 }
 
-pub fn save_as(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
+pub async fn save_as(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
     let dlg = gtk::FileChooserDialog::builder()
         .transient_for(parent)
         .local_only(true)
@@ -49,12 +51,13 @@ pub fn save_as(parent: &gtk::Window, pwd: &Path) -> Option<PathBuf> {
 
     dlg.set_current_folder(pwd);
 
-    let result = match dlg.run() {
+    let result = match dlg.run_future().await {
         gtk::ResponseType::Accept => dlg.filename(),
         _ => None,
     };
 
     dlg.close();
+    pending().await;
 
     result
 }

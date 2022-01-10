@@ -1,4 +1,7 @@
 use crate::gtk_prelude::*;
+use crate::utils::pending;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::time::Duration;
 
 fn dialog(parent: &gtk::Window, title: &str) -> gtk::Dialog {
@@ -19,7 +22,12 @@ fn dialog(parent: &gtk::Window, title: &str) -> gtk::Dialog {
         .build()
 }
 
-pub fn prompt(parent: &gtk::Window, title: &str, message: &str, value: &str) -> Option<String> {
+pub async fn prompt(
+    parent: &gtk::Window,
+    title: &str,
+    message: &str,
+    value: &str,
+) -> Option<String> {
     let dlg = dialog(parent, title);
 
     dlg.add_button("Cancel", gtk::ResponseType::Cancel);
@@ -48,15 +56,16 @@ pub fn prompt(parent: &gtk::Window, title: &str, message: &str, value: &str) -> 
     container.pack_start(&entry, false, true, 0);
 
     dlg.show_all();
-    let result = match dlg.run() {
+    let result = match dlg.run_future().await {
         gtk::ResponseType::Ok => Some(entry.text().to_string()),
         _ => None,
     };
     dlg.close();
+    pending().await;
     result
 }
 
-pub fn confirm_delete(parent: &gtk::Window, message: &str) -> (bool, bool) {
+pub async fn confirm_delete(parent: &gtk::Window, message: &str) -> (bool, bool) {
     let dlg = dialog(parent, "Delete");
     let yes = dlg.add_button("Delete", gtk::ResponseType::Ok);
     yes.style_context()
@@ -85,15 +94,16 @@ pub fn confirm_delete(parent: &gtk::Window, message: &str) -> (bool, bool) {
     container.pack_start(&again, false, true, 0);
 
     dlg.show_all();
-    let result = match dlg.run() {
-        gtk::ResponseType::Ok => (true, again.is_active()),
-        _ => (false, again.is_active()),
-    };
+    let response = dlg.run_future().await;
+    let ask_again = again.is_active();
     dlg.close();
-    result
+    pending().await;
+
+    let allow_delete = response == gtk::ResponseType::Ok;
+    (allow_delete, ask_again)
 }
 
-pub fn confirm(parent: &gtk::Window, message: &str) -> bool {
+pub async fn confirm(parent: &gtk::Window, message: &str) -> bool {
     let dlg = gtk::MessageDialog::builder()
         .message_type(gtk::MessageType::Question)
         .transient_for(parent)
@@ -101,12 +111,13 @@ pub fn confirm(parent: &gtk::Window, message: &str) -> bool {
         .buttons(gtk::ButtonsType::YesNo)
         .build();
     dlg.show_all();
-    let result = dlg.run();
+    let result = dlg.run_future().await;
     dlg.close();
+    pending().await;
     result == gtk::ResponseType::Yes
 }
 
-pub fn notify(message_type: gtk::MessageType, parent: &gtk::Window, message: &str) {
+pub async fn notify(message_type: gtk::MessageType, parent: &gtk::Window, message: &str) {
     let dlg = gtk::MessageDialog::builder()
         .message_type(message_type)
         .transient_for(parent)
@@ -114,19 +125,20 @@ pub fn notify(message_type: gtk::MessageType, parent: &gtk::Window, message: &st
         .buttons(gtk::ButtonsType::Ok)
         .build();
     dlg.show_all();
-    dlg.run();
+    dlg.run_future().await;
     dlg.close();
+    pending().await;
 }
 
-pub fn notify_info(parent: &gtk::Window, message: &str) {
-    notify(gtk::MessageType::Info, parent, message)
+pub async fn notify_info(parent: &gtk::Window, message: &str) {
+    notify(gtk::MessageType::Info, parent, message).await;
 }
 
-pub fn notify_error(parent: &gtk::Window, message: &str) {
-    notify(gtk::MessageType::Error, parent, message)
+pub async fn notify_error(parent: &gtk::Window, message: &str) {
+    notify(gtk::MessageType::Error, parent, message).await;
 }
 
-pub fn notify_detailed(parent: &gtk::Window, message: &str, details: &str) {
+pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str) {
     let dlg = gtk::MessageDialog::builder()
         .message_type(gtk::MessageType::Info)
         .transient_for(parent)
@@ -168,44 +180,63 @@ pub fn notify_detailed(parent: &gtk::Window, message: &str, details: &str) {
     scrolled_window.add(&text_view);
 
     dlg.show_all();
-    dlg.run();
+    dlg.run_future().await;
     dlg.close();
+    pending().await;
 }
 
-pub fn progress(parent: &gtk::Window, title: &str) -> gtk::Dialog {
-    let dlg = gtk::Dialog::builder()
-        .title(title)
-        .transient_for(parent)
-        .type_(gtk::WindowType::Toplevel)
-        .type_hint(gdk::WindowTypeHint::Dialog)
-        .modal(true)
-        .window_position(gtk::WindowPosition::CenterOnParent)
-        .resizable(false)
-        .destroy_with_parent(false)
-        .decorated(true)
-        .gravity(gdk::Gravity::Center)
-        .focus_on_map(true)
-        .urgency_hint(false)
-        .use_header_bar(1)
-        .deletable(false)
-        .width_request(400)
-        .build();
+pub struct ProgressDialog {
+    dlg: gtk::Dialog,
+    running: Rc<Cell<bool>>,
+}
 
-    let progress_bar = gtk::ProgressBar::builder().margin(30).build();
+impl ProgressDialog {
+    pub fn new(parent: &gtk::Window, title: &str) -> Self {
+        let dlg = gtk::Dialog::builder()
+            .title(title)
+            .transient_for(parent)
+            .type_(gtk::WindowType::Toplevel)
+            .type_hint(gdk::WindowTypeHint::Dialog)
+            .modal(true)
+            .window_position(gtk::WindowPosition::CenterOnParent)
+            .resizable(false)
+            .destroy_with_parent(false)
+            .decorated(true)
+            .gravity(gdk::Gravity::Center)
+            .focus_on_map(true)
+            .urgency_hint(false)
+            .use_header_bar(1)
+            .deletable(false)
+            .width_request(400)
+            .build();
 
-    dlg.content_area().add(&progress_bar);
+        let progress_bar = gtk::ProgressBar::builder().margin(30).build();
 
-    let weak_progress_bar = progress_bar.downgrade();
-    glib::timeout_add_local(Duration::from_millis(100), move || {
-        if let Some(progress_bar) = weak_progress_bar.upgrade() {
-            progress_bar.pulse();
-            glib::Continue(true)
-        } else {
-            glib::Continue(false)
-        }
-    });
+        dlg.content_area().add(&progress_bar);
 
-    dlg.show_all();
+        let running = Rc::new(Cell::new(true));
+        dlg.connect_delete_event(clone!(@weak running => @default-return glib::signal::Inhibit(false), move |_dlg, _event| {
+            glib::signal::Inhibit(running.get())
+        }));
 
-    dlg
+        let weak_progress_bar = progress_bar.downgrade();
+        glib::timeout_add_local(Duration::from_millis(100), move || {
+            if let Some(progress_bar) = weak_progress_bar.upgrade() {
+                progress_bar.pulse();
+                glib::Continue(true)
+            } else {
+                glib::Continue(false)
+            }
+        });
+
+        dlg.show_all();
+
+        Self { dlg, running }
+    }
+
+    pub async fn close(self) {
+        self.running.set(false);
+        self.dlg.close();
+        pending().await;
+    }
 }

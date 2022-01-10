@@ -44,16 +44,14 @@ fn get_window(widget: &impl IsA<gtk::Widget>) -> Option<gtk::Window> {
         .and_then(|w| w.downcast::<gtk::Window>().ok())
 }
 
-fn pick_directory(widget: &impl IsA<gtk::Widget>) -> Option<PathBuf> {
-    let window = get_window(widget)?;
+async fn pick_directory(window: &gtk::Window) -> Option<PathBuf> {
     let pwd = std::env::current_dir().ok()?;
-    let path = select_dir(&window, &pwd)?;
+    let path = select_dir(&window, &pwd).await?;
     Some(path)
 }
 
-fn pick_pattern(widget: &impl IsA<gtk::Widget>) -> Option<String> {
-    let window = get_window(widget)?;
-    let pattern = prompt(&window, "Add pattern", "pattern", "")?;
+async fn pick_pattern(window: &gtk::Window) -> Option<String> {
+    let pattern = prompt(&window, "Add pattern", "pattern", "").await?;
     if pattern.is_empty() {
         None
     } else {
@@ -67,8 +65,12 @@ fn add_directory_button(string_list: &StringList<Directory>) -> gtk::Button {
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
-        if let Some(new_value) = pick_directory(button) {
-            string_list.append(Directory(new_value));
+        if let Some(window) = get_window(button) {
+            glib::MainContext::default().spawn_local(async move {
+                if let Some(new_value) = pick_directory(&window).await {
+                    string_list.append(Directory(new_value));
+                }
+            });
         }
     }));
     button
@@ -80,8 +82,12 @@ fn add_excluded_directory_button(string_list: &StringList<Exclusion>) -> gtk::Bu
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
-        if let Some(new_value) = pick_directory(button) {
-            string_list.append(Exclusion::Directory(new_value));
+        if let Some(window) = get_window(button) {
+            glib::MainContext::default().spawn_local(async move {
+                if let Some(new_value) = pick_directory(&window).await {
+                    string_list.append(Exclusion::Directory(new_value));
+                }
+            });
         }
     }));
     button
@@ -93,8 +99,12 @@ fn add_exclusion_pattern_button(string_list: &StringList<Exclusion>) -> gtk::But
         .hexpand(false)
         .build();
     button.connect_clicked(clone!(@weak string_list => move |button| {
-        if let Some(new_value) = pick_pattern(button) {
-            string_list.append(Exclusion::Pattern(new_value));
+        if let Some(window) = get_window(button) {
+            glib::MainContext::default().spawn_local(async move {
+                if let Some(new_value) = pick_pattern(&window).await {
+                    string_list.append(Exclusion::Pattern(new_value));
+                }
+            });
         }
     }));
     button

@@ -4,7 +4,7 @@ use crate::find_duplicates::{duplication_status, find_duplicate_groups, Duplicat
 use crate::gtk_prelude::*;
 use crate::options;
 use crate::path_choose;
-use crate::user_interaction;
+use crate::user_interaction::{self, ProgressDialog};
 use crate::utils::horizontal_expander;
 use crate::widgets::go_button::go_button;
 use crate::widgets::menu_builder::MenuBuilderExt;
@@ -122,7 +122,7 @@ pub struct MainWindowPrivate {
     view: duplicates_list::DuplicatesList,
 
     find_sender: glib::Sender<FindResult>,
-    progress: RefCell<Option<gtk::Dialog>>,
+    progress: RefCell<Option<ProgressDialog>>,
 }
 
 impl MainWindow {
@@ -181,7 +181,15 @@ impl MainWindow {
         );
 
         main_window.register_actions(&main_window.0);
-        find_receiver.attach(None, clone!(@weak main_window => @default-return glib::Continue(false), move |msg| main_window.on_find_finished(msg)));
+        find_receiver.attach(
+            None,
+            clone!(@weak main_window => @default-return glib::Continue(false), move |msg| {
+                glib::MainContext::default().spawn_local(async move {
+                    main_window.on_find_finished(msg).await;
+                });
+                glib::Continue(true)
+            }),
+        );
 
         for ignore in DEFAULT_EXCLUDE_PATTERNS.iter() {
             main_window.add_excluded(ignore.clone());
@@ -214,13 +222,11 @@ impl MainWindow {
         private.options.add_excluded(excluded);
     }
 
-    fn on_find_finished(&self, msg: FindResult) -> glib::Continue {
+    async fn on_find_finished(&self, msg: FindResult) {
         let private = self.get_private();
 
         if let Some(progress) = private.progress.borrow_mut().take() {
-            unsafe {
-                progress.destroy();
-            }
+            progress.close().await;
         }
 
         match msg {
@@ -238,16 +244,15 @@ impl MainWindow {
 
                 let status = duplication_status(&duplicates);
 
-                user_interaction::notify_info(&self.0.clone().upcast(), &status);
+                user_interaction::notify_info(&self.0.clone().upcast(), &status).await;
             }
             Err(error) => {
-                self.show_error(&error);
+                self.show_error(&error).await;
             }
         }
-        glib::Continue(true)
     }
 
-    fn do_save(&self) -> Result<(), Box<dyn Error>> {
+    async fn do_save(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
         let selected = private.view.get_selected_iters();
         let to_save: Vec<PathBuf> = if !selected.is_empty() {
@@ -269,7 +274,7 @@ impl MainWindow {
         }
 
         let pwd = env::current_dir().unwrap();
-        let file_save_as = match path_choose::save_as(&self.0.clone().upcast(), &pwd) {
+        let file_save_as = match path_choose::save_as(&self.0.clone().upcast(), &pwd).await {
             Some(path) => path,
             None => return Ok(()),
         };
@@ -279,11 +284,14 @@ impl MainWindow {
                 if !user_interaction::confirm(
                     &self.0.clone().upcast(),
                     &format!("Do you want to overwrite?\n{}", file_save_as.display()),
-                ) {
+                )
+                .await
+                {
                     return Ok(());
                 }
             } else {
-                self.show_error(format!("You can't overwrite {}", file_save_as.display()));
+                self.show_error(format!("You can't overwrite {}", file_save_as.display()))
+                    .await;
                 return Ok(());
             }
         }
@@ -313,7 +321,7 @@ impl MainWindow {
         Ok((path, name))
     }
 
-    fn do_rename(&self) -> Result<(), Box<dyn Error>> {
+    async fn do_rename(&self) -> Result<(), Box<dyn Error>> {
         let private = self.get_private();
         let iter = match private.view.get_selected_iter() {
             Some(iter) => iter,
@@ -327,7 +335,9 @@ impl MainWindow {
             "Rename file",
             "Name:",
             &old_name,
-        ) {
+        )
+        .await
+        {
             Some(name) if name != old_name => name,
             _ => return Ok(()),
         };
@@ -362,19 +372,35 @@ impl MainWindow {
         Ok(())
     }
 
-    fn show_error(&self, message: impl ToString) {
-        user_interaction::notify_error(&self.0.clone().upcast(), &message.to_string());
+    async fn confirm_deletion(&self, count: usize) -> bool {
+        if self.get_private().confirm_delete.get() {
+            let question = if count == 1 {
+                "Are you sure you want to delete this file?".into()
+            } else {
+                format!("Are you sure you want to delete these {} files?", count)
+            };
+            let (confirm, ask_again) =
+                user_interaction::confirm_delete(&self.0.clone().upcast(), &question).await;
+            self.get_private().confirm_delete.set(ask_again);
+            confirm
+        } else {
+            true
+        }
+    }
+
+    async fn show_error(&self, message: impl ToString) {
+        user_interaction::notify_error(&self.0.clone().upcast(), &message.to_string()).await;
     }
 }
 
 #[awesome_glib::actions]
 impl MainWindow {
-    fn find(&self) {
+    async fn find(&self) {
         let private = self.get_private();
 
         let search_dirs = private.options.get_directories();
         if search_dirs.is_empty() {
-            self.show_error("No search paths specified");
+            self.show_error("No search paths specified").await;
             return;
         }
         let excluded = private.options.get_excluded();
@@ -384,8 +410,8 @@ impl MainWindow {
 
         private.duplicates.clear();
 
-        let progress = user_interaction::progress(&self.0.clone().upcast(), "Searching...");
-        progress.show();
+        let progress =
+            user_interaction::ProgressDialog::new(&self.0.clone().upcast(), "Searching...");
         *private.progress.borrow_mut() = Some(progress);
 
         let sender = private.find_sender.clone();
@@ -395,21 +421,21 @@ impl MainWindow {
         });
     }
 
-    fn open(&self) {
+    async fn open(&self) {
         if let Some(path) = self.get_selected_fs_path() {
             if let Err(error) = xdg_open(&path) {
-                self.show_error(error);
+                self.show_error(error).await;
             }
         }
     }
 
-    fn open_directory(&self) {
+    async fn open_directory(&self) {
         if let Some(dir) = self
             .get_selected_fs_path()
             .and_then(|path| path.parent().map(|p| p.to_path_buf()))
         {
             if let Err(error) = xdg_open(&dir) {
-                self.show_error(error);
+                self.show_error(error).await;
             }
         }
     }
@@ -421,9 +447,9 @@ impl MainWindow {
         }
     }
 
-    fn rename(&self) {
-        if let Err(error) = self.do_rename() {
-            self.show_error(error);
+    async fn rename(&self) {
+        if let Err(error) = self.do_rename().await {
+            self.show_error(error).await;
         }
     }
 
@@ -448,7 +474,7 @@ impl MainWindow {
         }
     }
 
-    fn select_wildcard(&self, select: bool) {
+    async fn select_wildcard(&self, select: bool) {
         let private = self.get_private();
         if private.duplicates.is_empty() {
             return;
@@ -460,7 +486,8 @@ impl MainWindow {
             "Unselect by wildcard"
         };
         let wildcard =
-            match user_interaction::prompt(&self.0.clone().upcast(), title, "Wildcard:", "*") {
+            match user_interaction::prompt(&self.0.clone().upcast(), title, "Wildcard:", "*").await
+            {
                 Some(answer) if !answer.is_empty() => answer,
                 _ => return,
             };
@@ -468,7 +495,7 @@ impl MainWindow {
         let pattern = match glob::Pattern::new(&wildcard) {
             Ok(pattern) => pattern,
             Err(error) => {
-                self.show_error(&error.to_string());
+                self.show_error(&error.to_string()).await;
                 return;
             }
         };
@@ -534,28 +561,17 @@ impl MainWindow {
         private.view.get_selection().unselect_all();
     }
 
-    fn delete(&self) {
+    async fn delete(&self) {
         let private = self.get_private();
         let selected = private.view.get_selected_iters();
 
         let count = selected.len();
         if count == 0 {
-            self.show_error("No file is selected");
+            self.show_error("No file is selected").await;
             return;
         }
-
-        if self.get_private().confirm_delete.get() {
-            let question = if count == 1 {
-                "Are you sure you want to delete this file?".into()
-            } else {
-                format!("Are you sure you want to delete these {} files?", count)
-            };
-            let (confirm, ask_again) =
-                user_interaction::confirm_delete(&self.0.clone().upcast(), &question);
-            self.get_private().confirm_delete.set(ask_again);
-            if !confirm {
-                return;
-            }
+        if !self.confirm_deletion(count).await {
+            return;
         }
 
         let mut deleted: Vec<gtk::TreeIter> = Vec::new();
@@ -577,7 +593,8 @@ impl MainWindow {
             user_interaction::notify_info(
                 &self.0.clone().upcast(),
                 &format!("{} items deleted", deleted.len()),
-            );
+            )
+            .await;
         } else {
             let mut error_message = String::from("Following errors happened:\n");
             for error in errors {
@@ -588,13 +605,14 @@ impl MainWindow {
                 &self.0.clone().upcast(),
                 &format!("{} items deleted", deleted.len()),
                 &error_message,
-            );
+            )
+            .await;
         }
     }
 
-    fn save(&self) {
-        if let Err(error) = self.do_save() {
-            self.show_error(error);
+    async fn save(&self) {
+        if let Err(error) = self.do_save().await {
+            self.show_error(error).await;
         }
     }
 }
