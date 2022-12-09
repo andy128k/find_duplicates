@@ -22,8 +22,8 @@ impl<T> StringList<T> {
         column.set_expand(true);
 
         let text = gtk::CellRendererText::new();
-        column.pack_start(&text, true);
-        column.add_attribute(&text, "text", 0);
+        CellLayoutExt::pack_start(&column, &text, true);
+        TreeViewColumnExt::add_attribute(&column, &text, "text", 0);
 
         view.append_column(&column);
 

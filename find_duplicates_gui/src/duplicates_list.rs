@@ -281,10 +281,20 @@ impl DuplicatesList {
                 .title(title)
                 .build();
             let text = gtk::CellRendererText::new();
-            column.pack_start(&text, true);
-            column.add_attribute(&text, "text", text_column as i32);
-            column.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
-            column.add_attribute(&text, "background", StoreColumn::Background as i32);
+            CellLayoutExt::pack_start(&column, &text, true);
+            TreeViewColumnExt::add_attribute(&column, &text, "text", text_column as i32);
+            TreeViewColumnExt::add_attribute(
+                &column,
+                &text,
+                "background-set",
+                StoreColumn::IsGroup as i32,
+            );
+            TreeViewColumnExt::add_attribute(
+                &column,
+                &text,
+                "background",
+                StoreColumn::Background as i32,
+            );
             column
         }
 

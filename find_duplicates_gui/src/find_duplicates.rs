@@ -1,5 +1,5 @@
 use crate::exclusion::Exclusion;
-use humansize::{file_size_opts::DECIMAL, FileSize};
+use humansize::{format_size, DECIMAL};
 use lazy_static::lazy_static;
 use sha2::{
     digest::{generic_array::GenericArray, OutputSizeUser},
@@ -235,7 +235,7 @@ pub fn duplication_status(dups: &[DuplicatesGroup]) -> String {
 
     format!(
         "{} wasted in {} files (in {} groups)",
-        waste_bytes.file_size(DECIMAL).unwrap(),
+        format_size(waste_bytes, DECIMAL),
         waste_count,
         dups.len()
     )
