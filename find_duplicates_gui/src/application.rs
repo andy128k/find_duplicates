@@ -12,7 +12,7 @@ pub fn create_application() -> gtk::Application {
         if let Ok(directory) = std::env::current_dir() {
             app_window.add_directory(&directory);
         }
-        app_window.show_all();
+        app_window.show();
     });
 
     app

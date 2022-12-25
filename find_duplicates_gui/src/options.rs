@@ -141,6 +141,12 @@ fn button_column(buttons: &[gtk::Button]) -> gtk::Widget {
     container.upcast()
 }
 
+impl Default for Options {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Options {
     pub fn new() -> Self {
         let container = gtk::Grid::builder()

@@ -20,8 +20,8 @@ enum StoreColumn {
     Background = 7,
 }
 
-impl DuplicatesStore {
-    pub fn new() -> Self {
+impl Default for DuplicatesStore {
+    fn default() -> Self {
         Self(gtk::ListStore::new(&[
             glib::Type::BOOL,   // IsGroup
             glib::Type::STRING, // Name
@@ -33,7 +33,9 @@ impl DuplicatesStore {
             glib::Type::STRING, // Background
         ]))
     }
+}
 
+impl DuplicatesStore {
     pub fn is_empty(&self) -> bool {
         self.0.iter_first().is_none()
     }
@@ -259,14 +261,19 @@ pub struct DuplicatesList {
     tree_view: gtk::TreeView,
 }
 
+impl Default for DuplicatesList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DuplicatesList {
-    pub fn new(model: &DuplicatesStore) -> Self {
+    pub fn new() -> Self {
         let tree_view = gtk::TreeView::builder()
             .can_focus(true)
             .hexpand(true)
             .vexpand(true)
             .headers_visible(true)
-            .model(&model.to_model())
             .build();
 
         fn column(title: &str, text_column: StoreColumn) -> gtk::TreeViewColumn {
@@ -308,6 +315,10 @@ impl DuplicatesList {
             scrolled_window,
             tree_view,
         }
+    }
+
+    pub fn set_model(&self, model: &DuplicatesStore) {
+        self.tree_view.set_model(Some(&model.to_model()));
     }
 
     pub fn set_popup(&self, popup_model: &gio::MenuModel) {
