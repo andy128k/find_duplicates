@@ -1,91 +1,88 @@
 use crate::gtk_prelude::*;
-use serde::{de::DeserializeOwned, Serialize};
+use crate::utils::BitsetExt;
 use std::marker::PhantomData;
 
+fn label_factory(
+    display: impl Fn(&glib::Object) -> Option<String> + 'static,
+) -> gtk::ListItemFactory {
+    let factory = gtk::SignalListItemFactory::new();
+    factory.connect_setup(|_, list_item| {
+        list_item.set_child(Some(
+            &gtk::Label::builder().halign(gtk::Align::Start).build(),
+        ))
+    });
+    factory.connect_bind(move |_, list_item| {
+        if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
+            let text = list_item.item().and_then(|obj| display(&obj));
+            label.set_text(text.as_deref().unwrap_or_default());
+        }
+    });
+    factory.connect_unbind(|_, list_item| {
+        if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
+            label.set_text("");
+        }
+    });
+    factory.connect_teardown(|_, list_item| list_item.set_child(gtk::Widget::NONE));
+    factory.upcast()
+}
+
 #[derive(Clone, glib::Downgrade)]
-pub struct StringList<T>(gtk::TreeView, PhantomData<T>);
+pub struct StringList<T>(gtk::ListView, gio::ListStore, PhantomData<T>);
 
-impl<T> StringList<T> {
+fn display_boxed<T: ToString + 'static>(obj: &glib::Object) -> Option<String> {
+    obj.downcast_ref::<glib::BoxedAnyObject>()
+        .map(|b| b.borrow::<T>().to_string())
+}
+
+impl<T: ToString + 'static> StringList<T> {
     pub fn new() -> Self {
-        let model = gtk::ListStore::new(&[glib::Type::STRING, glib::Type::STRING]);
+        let model = gio::ListStore::new(glib::BoxedAnyObject::static_type());
 
-        let view = gtk::TreeView::builder()
+        let selection_model = gtk::MultiSelection::new(Some(&model));
+
+        let factory = label_factory(display_boxed::<T>);
+
+        let view = gtk::ListView::builder()
             .can_focus(true)
             .hexpand(true)
             .vexpand(true)
-            .headers_visible(false)
-            .model(&model)
+            .model(&selection_model)
+            .factory(&factory)
             .build();
-        view.selection().set_mode(gtk::SelectionMode::Multiple);
 
-        let column = gtk::TreeViewColumn::new();
-        column.set_sizing(gtk::TreeViewColumnSizing::Autosize);
-        column.set_expand(true);
-
-        let text = gtk::CellRendererText::new();
-        CellLayoutExt::pack_start(&column, &text, true);
-        column.add_attribute(&text, "text", 0);
-
-        view.append_column(&column);
-
-        Self(view, PhantomData)
+        Self(view, model, PhantomData)
     }
 
     pub fn get_widget(&self) -> gtk::Widget {
         self.0.clone().upcast()
     }
 
-    fn get_model(&self) -> gtk::ListStore {
-        self.0.model().unwrap().downcast().unwrap()
+    fn get_model(&self) -> &gio::ListStore {
+        &self.1
     }
 
     pub fn clear(&self) {
-        self.get_model().clear()
+        self.get_model().remove_all()
     }
 
     pub fn remove_selection(&self) {
-        let view = &self.0;
-        let model = self.get_model();
-        remove_selection(view, &model);
+        for position in self.0.model().unwrap().selection().to_vec().iter().rev() {
+            self.get_model().remove(*position);
+        }
     }
 }
 
-impl<T: ToString + Serialize + DeserializeOwned> StringList<T> {
+impl<T: ToString + Clone + 'static> StringList<T> {
     pub fn append(&self, value: T) {
-        let bytes = bincode::serialize(&value).expect("Bincode serializes value");
-        let hex = hex::encode(&bytes);
-
-        let model = self.get_model();
-        let iter = model.append();
-        model.set_value(&iter, 0, &glib::Value::from(&value.to_string()));
-        model.set_value(&iter, 1, &glib::Value::from(&hex));
+        let item = glib::BoxedAnyObject::new(value);
+        self.get_model().append(&item);
     }
 
     pub fn to_vec(&self) -> Vec<T> {
-        let mut result: Vec<T> = Vec::new();
-        self.get_model().foreach(|model, _path, iter| {
-            let hex = model.get::<String>(iter, 1);
-            let bytes = hex::decode(&hex).unwrap();
-            let value = bincode::deserialize(&bytes).expect("Bincode deserializes value");
-            result.push(value);
-            false
-        });
-        result
-    }
-}
-
-fn remove_selection(view: &gtk::TreeView, store: &gtk::ListStore) {
-    let (selected, model) = view.selection().selected_rows();
-    let row_refs: Vec<gtk::TreeRowReference> = selected
-        .into_iter()
-        .filter_map(|path| gtk::TreeRowReference::new(&model, &path))
-        .collect();
-
-    for row_ref in row_refs {
-        if let Some(path) = row_ref.path() {
-            if let Some(iter) = model.iter(&path) {
-                store.remove(&iter);
-            }
-        }
+        self.get_model()
+            .iter::<glib::BoxedAnyObject>()
+            .unwrap()
+            .map(|bx| (*bx.unwrap().borrow::<T>()).clone())
+            .collect()
     }
 }

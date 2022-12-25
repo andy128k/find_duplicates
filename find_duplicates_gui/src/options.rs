@@ -108,7 +108,7 @@ fn add_exclusion_pattern_button(string_list: &StringList<Exclusion>) -> gtk::But
     button
 }
 
-fn remove_selection_button<T: 'static>(string_list: &StringList<T>) -> gtk::Button {
+fn remove_selection_button<T: ToString + 'static>(string_list: &StringList<T>) -> gtk::Button {
     let button = gtk::Button::builder()
         .label("Remove")
         .hexpand(false)
@@ -119,7 +119,7 @@ fn remove_selection_button<T: 'static>(string_list: &StringList<T>) -> gtk::Butt
     button
 }
 
-fn clear_button<T: 'static>(string_list: &StringList<T>) -> gtk::Button {
+fn clear_button<T: ToString + 'static>(string_list: &StringList<T>) -> gtk::Button {
     let button = gtk::Button::builder().label("Clear").hexpand(false).build();
     button.connect_clicked(clone!(@weak string_list => move |_|
         string_list.clear()

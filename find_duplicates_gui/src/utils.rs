@@ -25,3 +25,20 @@ pub fn horizontal_expander() -> gtk::Widget {
 pub async fn pending() {
     glib::timeout_future(Duration::from_millis(1)).await;
 }
+
+pub trait BitsetExt {
+    fn to_vec(&self) -> Vec<u32>;
+}
+
+impl BitsetExt for gtk::Bitset {
+    fn to_vec(&self) -> Vec<u32> {
+        let mut indexes = Vec::new();
+        if let Some((mut iter, position)) = gtk::BitsetIter::init_first(self) {
+            indexes.push(position);
+            while let Some(position) = iter.next() {
+                indexes.push(position);
+            }
+        }
+        indexes
+    }
+}
