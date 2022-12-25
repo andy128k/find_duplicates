@@ -3,7 +3,7 @@ use crate::gtk_prelude::*;
 use crate::path_choose::select_dir;
 use crate::string_list::StringList;
 use crate::user_interaction::prompt;
-use crate::utils::horizontal_expander;
+use crate::utils::{horizontal_expander, scrolled};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
@@ -165,15 +165,13 @@ impl Options {
             .spacing(8)
             .build();
 
-        let directories = StringList::new();
-        directories.get_widget().set_hexpand(true);
-        directories.get_widget().set_vexpand(true);
-        directories_container.append(&directories.get_widget());
+        let directories_view = StringList::new();
+        directories_container.append(&scrolled(&directories_view.get_widget(), true));
 
         let directories_buttons = button_column(&[
-            add_directory_button(&directories),
-            remove_selection_button(&directories),
-            clear_button(&directories),
+            add_directory_button(&directories_view),
+            remove_selection_button(&directories_view),
+            clear_button(&directories_view),
         ]);
         directories_container.append(&directories_buttons);
 
@@ -182,14 +180,15 @@ impl Options {
         let excluded_label = form_label("Paths to exclude");
         container.attach(&excluded_label, 0, 2, 3, 1);
 
-        let excluded = StringList::new();
-        container.attach(&excluded.get_widget(), 0, 3, 2, 1);
+        let excluded_view = StringList::new();
+        let excluded = scrolled(&excluded_view.get_widget(), true);
+        container.attach(&excluded, 0, 3, 2, 1);
 
         let excluded_buttons = button_column(&[
-            add_excluded_directory_button(&excluded),
-            add_exclusion_pattern_button(&excluded),
-            remove_selection_button(&excluded),
-            clear_button(&excluded),
+            add_excluded_directory_button(&excluded_view),
+            add_exclusion_pattern_button(&excluded_view),
+            remove_selection_button(&excluded_view),
+            clear_button(&excluded_view),
         ]);
         container.attach(&excluded_buttons, 2, 3, 1, 1);
 
@@ -216,8 +215,8 @@ impl Options {
 
         Self {
             container,
-            directories,
-            excluded,
+            directories: directories_view,
+            excluded: excluded_view,
             recurse,
             min_size,
         }

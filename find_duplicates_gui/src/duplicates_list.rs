@@ -1,4 +1,5 @@
 use crate::gtk_prelude::*;
+use crate::utils::scrolled;
 use chrono::prelude::*;
 use gtk::gdk::ffi::GDK_BUTTON_SECONDARY;
 use std::iter::Peekable;
@@ -302,13 +303,7 @@ impl DuplicatesList {
             !is_group
         });
 
-        let scrolled_window = gtk::ScrolledWindow::builder()
-            .can_focus(true)
-            .hscrollbar_policy(gtk::PolicyType::Automatic)
-            .vscrollbar_policy(gtk::PolicyType::Automatic)
-            .window_placement(gtk::CornerType::TopLeft)
-            .build();
-
+        let scrolled_window = scrolled(&tree_view, false);
         scrolled_window.set_child(Some(&tree_view));
 
         Self {

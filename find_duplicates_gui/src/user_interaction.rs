@@ -1,5 +1,5 @@
 use crate::gtk_prelude::*;
-use crate::utils::pending;
+use crate::utils::{pending, scrolled};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -163,18 +163,7 @@ pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str)
         .build();
     text_view.buffer().set_text(details);
 
-    let scrolled_window = gtk::ScrolledWindow::builder()
-        .can_focus(true)
-        .margin_start(20)
-        .margin_end(20)
-        .hscrollbar_policy(gtk::PolicyType::Automatic)
-        .vscrollbar_policy(gtk::PolicyType::Automatic)
-        .has_frame(true)
-        .window_placement(gtk::CornerType::TopLeft)
-        .hexpand(true)
-        .vexpand(true)
-        .child(&text_view)
-        .build();
+    let scrolled_window = scrolled(&text_view, true);
     scrolled_window.set_parent(&dlg.content_area());
 
     dlg.show();

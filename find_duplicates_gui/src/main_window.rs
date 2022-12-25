@@ -93,7 +93,6 @@ fn results_layout(top: &gtk::Widget, bottom: &gtk::Widget) -> gtk::Widget {
         .orientation(gtk::Orientation::Vertical)
         .homogeneous(false)
         .build();
-    top.set_vexpand(true);
     bx.append(top);
     bx.append(bottom);
     bx.upcast()

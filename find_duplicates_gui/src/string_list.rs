@@ -3,7 +3,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
 #[derive(Clone, glib::Downgrade)]
-pub struct StringList<T>(gtk::ScrolledWindow, PhantomData<T>);
+pub struct StringList<T>(gtk::TreeView, PhantomData<T>);
 
 impl<T> StringList<T> {
     pub fn new() -> Self {
@@ -28,28 +28,15 @@ impl<T> StringList<T> {
 
         view.append_column(&column);
 
-        let scrolled_window = gtk::ScrolledWindow::builder()
-            .can_focus(true)
-            .hscrollbar_policy(gtk::PolicyType::Automatic)
-            .vscrollbar_policy(gtk::PolicyType::Automatic)
-            .has_frame(true)
-            .window_placement(gtk::CornerType::TopLeft)
-            .child(&view)
-            .build();
-
-        Self(scrolled_window, PhantomData)
+        Self(view, PhantomData)
     }
 
     pub fn get_widget(&self) -> gtk::Widget {
         self.0.clone().upcast()
     }
 
-    fn get_view(&self) -> gtk::TreeView {
-        self.0.child().unwrap().downcast().unwrap()
-    }
-
     fn get_model(&self) -> gtk::ListStore {
-        self.get_view().model().unwrap().downcast().unwrap()
+        self.0.model().unwrap().downcast().unwrap()
     }
 
     pub fn clear(&self) {
@@ -57,9 +44,9 @@ impl<T> StringList<T> {
     }
 
     pub fn remove_selection(&self) {
-        let view = self.get_view();
+        let view = &self.0;
         let model = self.get_model();
-        remove_selection(&view, &model);
+        remove_selection(view, &model);
     }
 }
 
