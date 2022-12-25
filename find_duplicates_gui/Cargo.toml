@@ -5,7 +5,7 @@ authors = ["Andrey Kutejko <andy128k@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-gtk = { version = "0.16" }
+gtk = { package = "gtk4", version = "0.5" }
 
 glob = "0.3"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }

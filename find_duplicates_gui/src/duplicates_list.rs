@@ -1,5 +1,6 @@
 use crate::gtk_prelude::*;
 use chrono::prelude::*;
+use gtk::gdk::ffi::GDK_BUTTON_SECONDARY;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -119,23 +120,16 @@ impl DuplicatesStore {
     }
 
     pub fn get_fs_path(&self, iter: &gtk::TreeIter) -> Option<PathBuf> {
-        let path: String = self.0.value(iter, StoreColumn::Path as i32).get().ok()?;
+        let path = self.0.get::<String>(iter, StoreColumn::Path as i32);
         Some(Path::new(&path).to_path_buf())
     }
 
     pub fn is_group(&self, iter: &gtk::TreeIter) -> bool {
-        self.0
-            .value(iter, StoreColumn::IsGroup as i32)
-            .get()
-            .unwrap()
+        self.0.get::<bool>(iter, StoreColumn::IsGroup as i32)
     }
 
     pub fn modified(&self, iter: &gtk::TreeIter) -> DateTime<Local> {
-        let s: String = self
-            .0
-            .value(iter, StoreColumn::Modified as i32)
-            .get()
-            .unwrap();
+        let s = self.0.get::<String>(iter, StoreColumn::Modified as i32);
         DateTime::parse_from_rfc3339(&s)
             .unwrap()
             .with_timezone(&Local)
@@ -165,7 +159,7 @@ impl DuplicatesStore {
     }
 
     pub fn get_ref(&self, iter: &gtk::TreeIter) -> Option<gtk::TreeRowReference> {
-        let path = self.0.path(iter)?;
+        let path = self.0.path(iter);
         gtk::TreeRowReference::new(&self.0, &path)
     }
 
@@ -269,7 +263,8 @@ impl DuplicatesList {
     pub fn new(model: &DuplicatesStore) -> Self {
         let tree_view = gtk::TreeView::builder()
             .can_focus(true)
-            .expand(true)
+            .hexpand(true)
+            .vexpand(true)
             .headers_visible(true)
             .model(&model.to_model())
             .build();
@@ -282,19 +277,9 @@ impl DuplicatesList {
                 .build();
             let text = gtk::CellRendererText::new();
             CellLayoutExt::pack_start(&column, &text, true);
-            TreeViewColumnExt::add_attribute(&column, &text, "text", text_column as i32);
-            TreeViewColumnExt::add_attribute(
-                &column,
-                &text,
-                "background-set",
-                StoreColumn::IsGroup as i32,
-            );
-            TreeViewColumnExt::add_attribute(
-                &column,
-                &text,
-                "background",
-                StoreColumn::Background as i32,
-            );
+            column.add_attribute(&text, "text", text_column as i32);
+            column.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
+            column.add_attribute(&text, "background", StoreColumn::Background as i32);
             column
         }
 
@@ -304,26 +289,20 @@ impl DuplicatesList {
 
         let selection = tree_view.selection();
         selection.set_mode(gtk::SelectionMode::Multiple);
-        selection.set_select_function(Some(Box::new(
-            |_selection, model: &gtk::TreeModel, path, _selected| {
-                let iter = model.iter(path).unwrap();
-                let is_group: bool = model
-                    .value(&iter, StoreColumn::IsGroup as i32)
-                    .get()
-                    .unwrap();
-                !is_group
-            },
-        )));
+        selection.set_select_function(|_selection, model: &gtk::TreeModel, path, _selected| {
+            let iter = model.iter(path).unwrap();
+            let is_group = model.get::<bool>(&iter, StoreColumn::IsGroup as i32);
+            !is_group
+        });
 
         let scrolled_window = gtk::ScrolledWindow::builder()
             .can_focus(true)
             .hscrollbar_policy(gtk::PolicyType::Automatic)
             .vscrollbar_policy(gtk::PolicyType::Automatic)
-            .shadow_type(gtk::ShadowType::None)
             .window_placement(gtk::CornerType::TopLeft)
             .build();
 
-        scrolled_window.add(&tree_view);
+        scrolled_window.set_child(Some(&tree_view));
 
         Self {
             scrolled_window,
@@ -332,35 +311,36 @@ impl DuplicatesList {
     }
 
     pub fn set_popup(&self, popup_model: &gio::MenuModel) {
-        let popup = gtk::Menu::from_model(popup_model);
-        popup.set_attach_widget(Some(&self.tree_view));
+        let popup = gtk::PopoverMenu::from_model(Some(popup_model));
+        popup.set_parent(&self.tree_view);
 
-        self.tree_view.connect_button_press_event(
-            clone!(@weak popup => @default-return Inhibit(false), move |view, event| {
-                const GDK_BUTTON_SECONDARY: u32 = 3;
-                let button = event.button();
-                if button == GDK_BUTTON_SECONDARY {
-                    view.grab_focus();
+        let popup_click = gtk::GestureClick::builder().build();
+        popup_click.set_button(GDK_BUTTON_SECONDARY as u32);
+        self.tree_view.add_controller(&popup_click);
 
-                    let (x, y) = event.position();
-                    if let Some((Some(path), _, _, _)) = view.path_at_pos(x as i32, y as i32) {
-                        view.set_cursor(&path, None::<&gtk::TreeViewColumn>, false);
-                    }
-
-                    popup.popup_at_pointer(Some(event));
-
-                    Inhibit(true)
-                } else {
-                    Inhibit(false)
-                }
-            }),
-        );
-
-        self.tree_view.connect_popup_menu(
-            clone!(@weak popup => @default-return false, move |view| {
+        popup_click.connect_pressed(
+            clone!(@weak self.tree_view as view, @weak popup => move |_gesture, _n, x, y| {
                 view.grab_focus();
-                popup.popup_at_widget(view, gdk::Gravity::Center, gdk::Gravity::Center, None);
-                true
+
+                if let Some((Some(path), _, _, _)) = view.path_at_pos(x as i32, y as i32) {
+                    gtk::prelude::TreeViewExt::set_cursor(&view, &path, None::<&gtk::TreeViewColumn>, false);
+
+                    let row_rect = view.cell_area(Some(&path), None);
+                    popup.set_pointing_to(Some(&gdk::Rectangle::new(
+                        x as i32,
+                        row_rect.y(),
+                        0,
+                        row_rect.height(),
+                    )));
+                 } else {
+                    popup.set_pointing_to(Some(&gdk::Rectangle::new(
+                        x as i32,
+                        y as i32,
+                        0,
+                        0,
+                    )));
+                }
+                popup.popup();
             }),
         );
     }

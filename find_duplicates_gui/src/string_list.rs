@@ -11,7 +11,8 @@ impl<T> StringList<T> {
 
         let view = gtk::TreeView::builder()
             .can_focus(true)
-            .expand(true)
+            .hexpand(true)
+            .vexpand(true)
             .headers_visible(false)
             .model(&model)
             .build();
@@ -23,7 +24,7 @@ impl<T> StringList<T> {
 
         let text = gtk::CellRendererText::new();
         CellLayoutExt::pack_start(&column, &text, true);
-        TreeViewColumnExt::add_attribute(&column, &text, "text", 0);
+        column.add_attribute(&text, "text", 0);
 
         view.append_column(&column);
 
@@ -31,11 +32,10 @@ impl<T> StringList<T> {
             .can_focus(true)
             .hscrollbar_policy(gtk::PolicyType::Automatic)
             .vscrollbar_policy(gtk::PolicyType::Automatic)
-            .shadow_type(gtk::ShadowType::In)
+            .has_frame(true)
             .window_placement(gtk::CornerType::TopLeft)
+            .child(&view)
             .build();
-
-        scrolled_window.add(&view);
 
         Self(scrolled_window, PhantomData)
     }
@@ -77,7 +77,7 @@ impl<T: ToString + Serialize + DeserializeOwned> StringList<T> {
     pub fn to_vec(&self) -> Vec<T> {
         let mut result: Vec<T> = Vec::new();
         self.get_model().foreach(|model, _path, iter| {
-            let hex: String = model.value(iter, 1).get().unwrap();
+            let hex = model.get::<String>(iter, 1);
             let bytes = hex::decode(&hex).unwrap();
             let value = bincode::deserialize(&bytes).expect("Bincode deserializes value");
             result.push(value);

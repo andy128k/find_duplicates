@@ -23,26 +23,17 @@ fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn action_buttons() -> gtk::Widget {
-    let row = gtk::ButtonBox::builder()
+    let row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
         .homogeneous(false)
         .spacing(8)
-        .margin(8)
-        .orientation(gtk::Orientation::Horizontal)
-        .layout_style(gtk::ButtonBoxStyle::End)
+        .margin_start(8)
+        .margin_end(8)
+        .margin_top(8)
+        .margin_bottom(8)
         .build();
 
-    let del = gtk::Button::builder()
-        .label("Delete")
-        .action_name("win.delete")
-        .build();
-    row.pack_end(&del, false, false, 1);
-
-    let save = gtk::Button::builder()
-        .label("Save")
-        .tooltip_text("Save (selected) list to file")
-        .action_name("win.save")
-        .build();
-    row.pack_end(&save, false, false, 1);
+    row.append(&gtk::Label::builder().hexpand(true).build());
 
     let menu = gio::Menu::new()
         .item("Select using wildcard", "win.select_wildcard(true)")
@@ -60,10 +51,22 @@ fn action_buttons() -> gtk::Widget {
     let select = gtk::MenuButton::builder()
         .label("Select")
         .menu_model(&menu)
-        .use_popover(false)
         .direction(gtk::ArrowType::Up)
         .build();
-    row.pack_end(&select, false, false, 1);
+    row.append(&select);
+
+    let save = gtk::Button::builder()
+        .label("Save")
+        .tooltip_text("Save (selected) list to file")
+        .action_name("win.save")
+        .build();
+    row.append(&save);
+
+    let del = gtk::Button::builder()
+        .label("Delete")
+        .action_name("win.delete")
+        .build();
+    row.append(&del);
 
     row.upcast()
 }
@@ -73,7 +76,10 @@ fn sidebar_layout(child: &gtk::Widget, action: &gtk::Button) -> gtk::Widget {
         .column_homogeneous(false)
         .row_homogeneous(false)
         .row_spacing(16)
-        .margin(8)
+        .margin_start(8)
+        .margin_end(8)
+        .margin_top(8)
+        .margin_bottom(8)
         .build();
     grid.attach(child, 0, 0, 2, 1);
     grid.attach(&horizontal_expander(), 0, 1, 1, 1);
@@ -86,16 +92,22 @@ fn results_layout(top: &gtk::Widget, bottom: &gtk::Widget) -> gtk::Widget {
         .orientation(gtk::Orientation::Vertical)
         .homogeneous(false)
         .build();
-    bx.pack_start(top, true, true, 0);
-    bx.pack_start(bottom, false, false, 0);
+    top.set_vexpand(true);
+    bx.append(top);
+    bx.append(bottom);
     bx.upcast()
 }
 
 fn panes(sidebar: &gtk::Widget, main: &gtk::Widget) -> gtk::Widget {
-    let paned = gtk::Paned::builder().build();
-    paned.pack1(sidebar, false, false);
-    paned.pack2(main, true, false);
-    paned.upcast()
+    gtk::Paned::builder()
+        .start_child(sidebar)
+        .end_child(main)
+        .resize_start_child(false)
+        .shrink_start_child(false)
+        .resize_end_child(true)
+        .shrink_end_child(false)
+        .build()
+        .upcast()
 }
 
 fn duplicates_popup() -> gio::Menu {
@@ -136,16 +148,21 @@ impl MainWindow {
     pub fn new(application: &gtk::Application) -> Self {
         let window = gtk::ApplicationWindow::builder()
             .application(application)
-            .type_(gtk::WindowType::Toplevel)
-            .window_position(gtk::WindowPosition::Center)
             .default_width(1200)
             .default_height(800)
             .resizable(true)
             .build();
 
+        let title_label = gtk::Label::builder()
+            .label("Find duplicates")
+            .single_line_mode(true)
+            .ellipsize(pango::EllipsizeMode::End)
+            .build();
+        title_label.add_css_class("title");
+
         let headerbar = gtk::HeaderBar::builder()
-            .show_close_button(true)
-            .title("Find duplicates")
+            .show_title_buttons(true)
+            .title_widget(&title_label)
             .build();
         window.set_titlebar(Some(&headerbar));
 
@@ -164,7 +181,7 @@ impl MainWindow {
             &results_layout(&view.get_widget(), &action_buttons),
         );
 
-        window.add(&paned);
+        window.set_child(Some(&paned));
 
         let (find_sender, find_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
@@ -199,7 +216,7 @@ impl MainWindow {
     }
 
     pub fn show_all(&self) {
-        self.0.show_all();
+        self.0.show();
     }
 
     fn get_private(&self) -> &MainWindowPrivate {
@@ -442,8 +459,7 @@ impl MainWindow {
 
     fn copy(&self) {
         if let Some(path) = self.get_selected_fs_path() {
-            let clipboard = gtk::Clipboard::get(&gdk::Atom::intern("CLIPBOARD"));
-            clipboard.set_text(path.to_string_lossy().as_ref());
+            self.0.clipboard().set_text(path.to_string_lossy().as_ref());
         }
     }
 

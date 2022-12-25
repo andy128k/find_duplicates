@@ -8,16 +8,10 @@ fn dialog(parent: &gtk::Window, title: &str) -> gtk::Dialog {
     gtk::Dialog::builder()
         .title(title)
         .transient_for(parent)
-        .type_(gtk::WindowType::Toplevel)
-        .type_hint(gdk::WindowTypeHint::Dialog)
         .modal(true)
-        .window_position(gtk::WindowPosition::CenterOnParent)
         .resizable(false)
         .destroy_with_parent(false)
         .decorated(true)
-        .gravity(gdk::Gravity::Center)
-        .focus_on_map(true)
-        .urgency_hint(false)
         .use_header_bar(1)
         .build()
 }
@@ -38,24 +32,27 @@ pub async fn prompt(
         .homogeneous(false)
         .orientation(gtk::Orientation::Vertical)
         .spacing(8)
-        .margin(20)
+        .margin_start(20)
+        .margin_end(20)
+        .margin_top(20)
+        .margin_bottom(20)
         .build();
-    dlg.content_area().add(&container);
+    container.set_parent(&dlg.content_area());
 
     let label = gtk::Label::builder()
         .label(message)
         .xalign(0.0_f32)
         .yalign(0.5_f32)
         .build();
-    container.pack_start(&label, false, true, 0);
+    container.append(&label);
 
     let entry = gtk::Entry::builder()
         .text(value)
         .activates_default(true)
         .build();
-    container.pack_start(&entry, false, true, 0);
+    container.append(&entry);
 
-    dlg.show_all();
+    dlg.show();
     let result = match dlg.run_future().await {
         gtk::ResponseType::Ok => Some(entry.text().to_string()),
         _ => None,
@@ -68,32 +65,34 @@ pub async fn prompt(
 pub async fn confirm_delete(parent: &gtk::Window, message: &str) -> (bool, bool) {
     let dlg = dialog(parent, "Delete");
     let yes = dlg.add_button("Delete", gtk::ResponseType::Ok);
-    yes.style_context()
-        .add_class(&gtk::STYLE_CLASS_DESTRUCTIVE_ACTION);
+    yes.style_context().add_class("destructive-action");
     dlg.add_button("Cancel", gtk::ResponseType::Cancel);
 
     let container = gtk::Box::builder()
         .homogeneous(false)
         .orientation(gtk::Orientation::Vertical)
         .spacing(8)
-        .margin(20)
+        .margin_start(20)
+        .margin_end(20)
+        .margin_top(20)
+        .margin_bottom(20)
         .build();
-    dlg.content_area().add(&container);
+    container.set_parent(&dlg.content_area());
 
     let label = gtk::Label::builder()
         .label(message)
         .xalign(0.0_f32)
         .yalign(0.5_f32)
         .build();
-    container.pack_start(&label, false, true, 0);
+    container.append(&label);
 
     let again = gtk::CheckButton::builder()
         .label("Ask me this in future?")
         .active(true)
         .build();
-    container.pack_start(&again, false, true, 0);
+    container.append(&again);
 
-    dlg.show_all();
+    dlg.show();
     let response = dlg.run_future().await;
     let ask_again = again.is_active();
     dlg.close();
@@ -110,7 +109,7 @@ pub async fn confirm(parent: &gtk::Window, message: &str) -> bool {
         .text(message)
         .buttons(gtk::ButtonsType::YesNo)
         .build();
-    dlg.show_all();
+    dlg.show();
     let result = dlg.run_future().await;
     dlg.close();
     pending().await;
@@ -124,7 +123,7 @@ pub async fn notify(message_type: gtk::MessageType, parent: &gtk::Window, messag
         .text(message)
         .buttons(gtk::ButtonsType::Ok)
         .build();
-    dlg.show_all();
+    dlg.show();
     dlg.run_future().await;
     dlg.close();
     pending().await;
@@ -149,19 +148,6 @@ pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str)
         .resizable(true)
         .build();
 
-    let scrolled_window = gtk::ScrolledWindow::builder()
-        .can_focus(true)
-        .margin_start(20)
-        .margin_end(20)
-        .hscrollbar_policy(gtk::PolicyType::Automatic)
-        .vscrollbar_policy(gtk::PolicyType::Automatic)
-        .shadow_type(gtk::ShadowType::EtchedIn)
-        .window_placement(gtk::CornerType::TopLeft)
-        .expand(true)
-        .build();
-    dlg.content_area()
-        .pack_start(&scrolled_window, true, true, 0);
-
     let text_view = gtk::TextView::builder()
         .can_focus(true)
         .editable(false)
@@ -175,11 +161,23 @@ pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str)
         .top_margin(5)
         .bottom_margin(5)
         .build();
-    text_view.buffer().unwrap().set_text(details);
+    text_view.buffer().set_text(details);
 
-    scrolled_window.add(&text_view);
+    let scrolled_window = gtk::ScrolledWindow::builder()
+        .can_focus(true)
+        .margin_start(20)
+        .margin_end(20)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Automatic)
+        .has_frame(true)
+        .window_placement(gtk::CornerType::TopLeft)
+        .hexpand(true)
+        .vexpand(true)
+        .child(&text_view)
+        .build();
+    scrolled_window.set_parent(&dlg.content_area());
 
-    dlg.show_all();
+    dlg.show();
     dlg.run_future().await;
     dlg.close();
     pending().await;
@@ -195,29 +193,30 @@ impl ProgressDialog {
         let dlg = gtk::Dialog::builder()
             .title(title)
             .transient_for(parent)
-            .type_(gtk::WindowType::Toplevel)
-            .type_hint(gdk::WindowTypeHint::Dialog)
             .modal(true)
-            .window_position(gtk::WindowPosition::CenterOnParent)
             .resizable(false)
             .destroy_with_parent(false)
             .decorated(true)
-            .gravity(gdk::Gravity::Center)
-            .focus_on_map(true)
-            .urgency_hint(false)
             .use_header_bar(1)
             .deletable(false)
             .width_request(400)
             .build();
 
-        let progress_bar = gtk::ProgressBar::builder().margin(30).build();
+        let progress_bar = gtk::ProgressBar::builder()
+            .margin_start(30)
+            .margin_end(30)
+            .margin_top(30)
+            .margin_bottom(30)
+            .build();
 
-        dlg.content_area().add(&progress_bar);
+        progress_bar.set_parent(&dlg.content_area());
 
         let running = Rc::new(Cell::new(true));
-        dlg.connect_delete_event(clone!(@weak running => @default-return glib::signal::Inhibit(false), move |_dlg, _event| {
-            glib::signal::Inhibit(running.get())
-        }));
+        dlg.connect_close_request(
+            clone!(@weak running => @default-return glib::signal::Inhibit(false), move |_dlg| {
+                glib::signal::Inhibit(running.get())
+            }),
+        );
 
         let weak_progress_bar = progress_bar.downgrade();
         glib::timeout_add_local(Duration::from_millis(100), move || {
@@ -229,7 +228,7 @@ impl ProgressDialog {
             }
         });
 
-        dlg.show_all();
+        dlg.show();
 
         Self { dlg, running }
     }

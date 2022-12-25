@@ -39,9 +39,7 @@ pub struct Options {
 }
 
 fn get_window(widget: &impl IsA<gtk::Widget>) -> Option<gtk::Window> {
-    widget
-        .toplevel()
-        .and_then(|w| w.downcast::<gtk::Window>().ok())
+    widget.root()?.downcast::<gtk::Window>().ok()
 }
 
 async fn pick_directory(window: &gtk::Window) -> Option<PathBuf> {
@@ -137,7 +135,7 @@ fn button_column(buttons: &[gtk::Button]) -> gtk::Widget {
         .build();
 
     for button in buttons {
-        container.pack_start(button, false, false, 0);
+        container.append(button);
     }
 
     container.upcast()
@@ -162,14 +160,16 @@ impl Options {
             .build();
 
         let directories = StringList::new();
-        directories_container.pack_start(&directories.get_widget(), true, true, 0);
+        directories.get_widget().set_hexpand(true);
+        directories.get_widget().set_vexpand(true);
+        directories_container.append(&directories.get_widget());
 
         let directories_buttons = button_column(&[
             add_directory_button(&directories),
             remove_selection_button(&directories),
             clear_button(&directories),
         ]);
-        directories_container.pack_start(&directories_buttons, false, false, 0);
+        directories_container.append(&directories_buttons);
 
         container.attach(&directories_container, 0, 1, 3, 1);
 
