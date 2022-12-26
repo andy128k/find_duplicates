@@ -187,9 +187,9 @@ mod imp {
             window.register_actions(&*window);
             find_receiver.attach(
                 None,
-                clone!(@weak window => @default-return glib::Continue(false), move |msg| {
+                clone!(@weak self as imp => @default-return glib::Continue(false), move |msg| {
                     glib::MainContext::default().spawn_local(async move {
-                        window.on_find_finished(msg).await;
+                        imp.on_find_finished(msg).await;
                     });
                     glib::Continue(true)
                 }),
@@ -206,6 +206,37 @@ mod imp {
     impl WidgetImpl for MainWindow {}
     impl WindowImpl for MainWindow {}
     impl ApplicationWindowImpl for MainWindow {}
+
+    impl MainWindow {
+        async fn on_find_finished(&self, msg: FindResult) {
+            if let Some(progress) = self.progress.borrow_mut().take() {
+                progress.close().await;
+            }
+
+            match msg {
+                Ok(duplicates) => {
+                    for group in &duplicates {
+                        self.duplicates
+                            .append_group(group.files.len(), group.size());
+                        for fi in &group.files {
+                            self.duplicates.append_file(&fi.path, fi.modified, fi.size);
+                        }
+                    }
+
+                    let status = duplication_status(&duplicates);
+
+                    user_interaction::notify_info(self.obj().upcast_ref(), &status).await;
+                }
+                Err(error) => {
+                    self.show_error(&error).await;
+                }
+            }
+        }
+
+        async fn show_error(&self, message: impl ToString) {
+            user_interaction::notify_error(self.obj().upcast_ref(), &message.to_string()).await;
+        }
+    }
 }
 
 glib::wrapper! {
@@ -226,36 +257,6 @@ impl MainWindow {
 
     fn add_excluded(&self, excluded: Exclusion) {
         self.imp().options.add_excluded(excluded);
-    }
-
-    async fn on_find_finished(&self, msg: FindResult) {
-        let private = self.imp();
-
-        if let Some(progress) = private.progress.borrow_mut().take() {
-            progress.close().await;
-        }
-
-        match msg {
-            Ok(duplicates) => {
-                for group in &duplicates {
-                    private
-                        .duplicates
-                        .append_group(group.files.len(), group.size());
-                    for fi in &group.files {
-                        private
-                            .duplicates
-                            .append_file(&fi.path, fi.modified, fi.size);
-                    }
-                }
-
-                let status = duplication_status(&duplicates);
-
-                user_interaction::notify_info(self.upcast_ref(), &status).await;
-            }
-            Err(error) => {
-                self.show_error(&error).await;
-            }
-        }
     }
 
     async fn do_save(&self) -> Result<(), Box<dyn Error>> {
@@ -280,10 +281,7 @@ impl MainWindow {
         }
 
         let pwd = env::current_dir().unwrap();
-        let file_save_as = match path_choose::save_as(self.upcast_ref(), &pwd).await {
-            Some(path) => path,
-            None => return Ok(()),
-        };
+        let Some(file_save_as) = path_choose::save_as(self.upcast_ref(), &pwd).await else { return Ok(()) };
 
         if file_save_as.exists() {
             if file_save_as.is_file() {
@@ -329,20 +327,14 @@ impl MainWindow {
 
     async fn do_rename(&self) -> Result<(), Box<dyn Error>> {
         let private = self.imp();
-        let iter = match private.view.get_selected_iter() {
-            Some(iter) => iter,
-            None => return Ok(()),
-        };
+        let Some(iter) = private.view.get_selected_iter() else { return Ok(()) };
 
         let (old_path, old_name) = self.get_path_and_name(&iter)?;
 
-        let new_name =
-            match user_interaction::prompt(self.upcast_ref(), "Rename file", "Name:", &old_name)
-                .await
-            {
-                Some(name) if name != old_name => name,
-                _ => return Ok(()),
-            };
+        let Some(new_name) = user_interaction::prompt(self.upcast_ref(), "Rename file", "Name:", &old_name)
+            .await
+            .filter(|name| *name != old_name)
+            else { return Ok(()) };
 
         let mut new_path = old_path.parent().unwrap().to_path_buf();
         new_path.push(new_name);
@@ -485,11 +477,10 @@ impl MainWindow {
         } else {
             "Unselect by wildcard"
         };
-        let wildcard =
-            match user_interaction::prompt(self.upcast_ref(), title, "Wildcard:", "*").await {
-                Some(answer) if !answer.is_empty() => answer,
-                _ => return,
-            };
+        let Some(wildcard) = user_interaction::prompt(self.upcast_ref(), title, "Wildcard:", "*")
+            .await
+            .filter(|answer| !answer.is_empty())
+            else { return };
 
         let pattern = match glob::Pattern::new(&wildcard) {
             Ok(pattern) => pattern,
@@ -556,13 +547,11 @@ impl MainWindow {
     }
 
     fn unselect_all(&self) {
-        let private = self.imp();
-        private.view.get_selection().unselect_all();
+        self.imp().view.get_selection().unselect_all();
     }
 
     async fn delete(&self) {
-        let private = self.imp();
-        let selected = private.view.get_selected_iters();
+        let selected = self.imp().view.get_selected_iters();
 
         let count = selected.len();
         if count == 0 {
@@ -586,7 +575,7 @@ impl MainWindow {
             }
         }
 
-        private.duplicates.remove_all(&deleted);
+        self.imp().duplicates.remove_all(&deleted);
 
         if errors.is_empty() {
             user_interaction::notify_info(
