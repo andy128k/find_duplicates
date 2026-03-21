@@ -4,6 +4,7 @@ use gtk::{
     gdk::{self, ffi::GDK_BUTTON_SECONDARY},
     gio, glib,
     prelude::*,
+    subclass::prelude::*,
 };
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
@@ -259,75 +260,103 @@ impl Iterator for DuplicatesStoreGroupIter {
     }
 }
 
-#[derive(Clone)]
-pub struct DuplicatesList {
-    scrolled_window: gtk::ScrolledWindow,
-    tree_view: gtk::TreeView,
+mod imp {
+    use super::*;
+
+    #[derive(Default)]
+    pub struct DuplicatesList {
+        pub tree_view: gtk::TreeView,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for DuplicatesList {
+        const NAME: &'static str = "FDDuplicatesList";
+        type Type = super::DuplicatesList;
+        type ParentType = gtk::Widget;
+    }
+
+    impl ObjectImpl for DuplicatesList {
+        fn constructed(&self) {
+            self.parent_constructed();
+
+            let this = self.obj();
+            this.set_layout_manager(Some(gtk::BinLayout::new()));
+
+            self.tree_view.set_can_focus(true);
+            self.tree_view.set_hexpand(true);
+            self.tree_view.set_vexpand(true);
+            self.tree_view.set_headers_visible(true);
+
+            fn column(title: &str, text_column: StoreColumn) -> gtk::TreeViewColumn {
+                let column = gtk::TreeViewColumn::builder()
+                    .sizing(gtk::TreeViewColumnSizing::Autosize)
+                    .expand(true)
+                    .title(title)
+                    .build();
+                let text = gtk::CellRendererText::new();
+                CellLayoutExt::pack_start(&column, &text, true);
+                column.add_attribute(&text, "text", text_column as i32);
+                column.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
+                column.add_attribute(&text, "background", StoreColumn::Background as i32);
+                column
+            }
+
+            self.tree_view
+                .append_column(&column("Name", StoreColumn::Name));
+            self.tree_view
+                .append_column(&column("Directory", StoreColumn::Directory));
+            self.tree_view
+                .append_column(&column("Date", StoreColumn::Time));
+
+            let selection = self.tree_view.selection();
+            selection.set_mode(gtk::SelectionMode::Multiple);
+            selection.set_select_function(|_selection, model: &gtk::TreeModel, path, _selected| {
+                let iter = model.iter(path).unwrap();
+                let is_group = model.get::<bool>(&iter, StoreColumn::IsGroup as i32);
+                !is_group
+            });
+
+            let scrolled_window = scrolled(&self.tree_view, false);
+            scrolled_window.set_child(Some(&self.tree_view));
+            scrolled_window.set_parent(&*this);
+        }
+
+        fn dispose(&self) {
+            while let Some(child) = self.obj().first_child() {
+                child.unparent();
+            }
+        }
+    }
+
+    impl WidgetImpl for DuplicatesList {}
+}
+
+glib::wrapper! {
+    pub struct DuplicatesList(ObjectSubclass<imp::DuplicatesList>)
+        @extends gtk::Widget,
+        @implements gtk::ConstraintTarget, gtk::Buildable, gtk::Accessible;
 }
 
 impl Default for DuplicatesList {
     fn default() -> Self {
-        Self::new()
+        glib::Object::new()
     }
 }
 
 impl DuplicatesList {
-    pub fn new() -> Self {
-        let tree_view = gtk::TreeView::builder()
-            .can_focus(true)
-            .hexpand(true)
-            .vexpand(true)
-            .headers_visible(true)
-            .build();
-
-        fn column(title: &str, text_column: StoreColumn) -> gtk::TreeViewColumn {
-            let column = gtk::TreeViewColumn::builder()
-                .sizing(gtk::TreeViewColumnSizing::Autosize)
-                .expand(true)
-                .title(title)
-                .build();
-            let text = gtk::CellRendererText::new();
-            CellLayoutExt::pack_start(&column, &text, true);
-            column.add_attribute(&text, "text", text_column as i32);
-            column.add_attribute(&text, "background-set", StoreColumn::IsGroup as i32);
-            column.add_attribute(&text, "background", StoreColumn::Background as i32);
-            column
-        }
-
-        tree_view.append_column(&column("Name", StoreColumn::Name));
-        tree_view.append_column(&column("Directory", StoreColumn::Directory));
-        tree_view.append_column(&column("Date", StoreColumn::Time));
-
-        let selection = tree_view.selection();
-        selection.set_mode(gtk::SelectionMode::Multiple);
-        selection.set_select_function(|_selection, model: &gtk::TreeModel, path, _selected| {
-            let iter = model.iter(path).unwrap();
-            let is_group = model.get::<bool>(&iter, StoreColumn::IsGroup as i32);
-            !is_group
-        });
-
-        let scrolled_window = scrolled(&tree_view, false);
-        scrolled_window.set_child(Some(&tree_view));
-
-        Self {
-            scrolled_window,
-            tree_view,
-        }
-    }
-
     pub fn set_model(&self, model: &DuplicatesStore) {
-        self.tree_view.set_model(Some(&model.to_model()));
+        self.imp().tree_view.set_model(Some(&model.to_model()));
     }
 
     pub fn set_popup(&self, popup_model: &gio::MenuModel) {
         let popup = gtk::PopoverMenu::from_model(Some(popup_model));
-        popup.set_parent(&self.tree_view);
+        popup.set_parent(&self.imp().tree_view);
 
         let popup_click = gtk::GestureClick::builder().build();
         popup_click.set_button(GDK_BUTTON_SECONDARY as u32);
         popup_click.connect_pressed(glib::clone!(
             #[weak(rename_to = view)]
-            self.tree_view,
+            self.imp().tree_view,
             #[weak]
             popup,
             move |_gesture, _n, x, y| {
@@ -354,19 +383,15 @@ impl DuplicatesList {
                 popup.popup();
             }
         ));
-        self.tree_view.add_controller(popup_click);
-    }
-
-    pub fn get_widget(&self) -> gtk::Widget {
-        self.scrolled_window.clone().upcast()
+        self.imp().tree_view.add_controller(popup_click);
     }
 
     pub fn get_selection(&self) -> gtk::TreeSelection {
-        self.tree_view.selection()
+        self.imp().tree_view.selection()
     }
 
     pub fn get_selected_iters(&self) -> Vec<gtk::TreeIter> {
-        let (selected, model) = self.tree_view.selection().selected_rows();
+        let (selected, model) = self.imp().tree_view.selection().selected_rows();
         selected
             .into_iter()
             .filter_map(|tree_path| model.iter(&tree_path))

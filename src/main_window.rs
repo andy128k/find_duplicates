@@ -92,6 +92,7 @@ fn results_layout(top: &gtk::Widget, bottom: &gtk::Widget) -> gtk::Widget {
         .orientation(gtk::Orientation::Vertical)
         .homogeneous(false)
         .build();
+    top.set_vexpand(true);
     bx.append(top);
     bx.append(bottom);
     bx.upcast()
@@ -173,7 +174,7 @@ mod imp {
 
             let paned = panes(
                 &sidebar_layout(&self.options.get_widget(), &go_button("Find", "win.find")),
-                &results_layout(&self.view.get_widget(), &action_buttons),
+                &results_layout(self.view.upcast_ref(), &action_buttons),
             );
 
             window.set_child(Some(&paned));
