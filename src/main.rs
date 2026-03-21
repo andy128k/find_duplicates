@@ -1,4 +1,5 @@
 mod application;
+mod duplicate;
 mod duplicates_list;
 mod exclusion;
 mod find_duplicates;

@@ -1,4 +1,5 @@
-use crate::duplicates_list;
+use crate::duplicate::Duplicate;
+use crate::duplicates_list::{self, Duplicates};
 use crate::exclusion::{DEFAULT_EXCLUDE_PATTERNS, Exclusion};
 use crate::find_duplicates::{DuplicatesGroup, duplication_status, find_duplicate_groups};
 use crate::options;
@@ -9,6 +10,7 @@ use crate::widgets::go_button::go_button;
 use crate::widgets::menu_builder::MenuBuilderExt;
 use gtk::{gio, glib, pango, prelude::*, subclass::prelude::*};
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -20,6 +22,12 @@ use std::thread;
 fn xdg_open(file: &Path) -> Result<(), Box<dyn Error>> {
     Command::new("xdg-open").arg(file).spawn()?;
     Ok(())
+}
+
+enum ItemWithinGroup {
+    First,
+    Newest,
+    Oldest,
 }
 
 fn action_buttons() -> gtk::Widget {
@@ -202,11 +210,11 @@ mod imp {
             match msg {
                 Ok(duplicates) => {
                     for group in &duplicates {
-                        self.duplicates
-                            .append_group(group.files.len(), group.size());
+                        let gr = Duplicates::new();
                         for fi in &group.files {
-                            self.duplicates.append_file(&fi.path, fi.modified, fi.size);
+                            gr.append_file(&fi.path, fi.modified, fi.size);
                         }
+                        self.duplicates.append_group(gr);
                     }
 
                     let status = duplication_status(&duplicates);
@@ -249,18 +257,23 @@ impl MainWindow {
 
     async fn do_save(&self) -> Result<(), Box<dyn Error>> {
         let private = self.imp();
-        let selected = private.view.get_selected_iters();
+        let selected = private.view.selected();
         let to_save: Vec<PathBuf> = if !selected.is_empty() {
             selected
                 .iter()
-                .filter_map(|iter| private.duplicates.get_fs_path(iter))
+                .map(|(_position, item)| item.path())
                 .collect()
         } else {
             private
                 .duplicates
                 .group_iter()
-                .flat_map(|(_group, files)| files.into_iter())
-                .filter_map(|iter| private.duplicates.get_fs_path(&iter))
+                .flat_map(|group| {
+                    group
+                        .iter()
+                        .map(|item| item.path())
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                })
                 .collect()
         };
 
@@ -295,33 +308,23 @@ impl MainWindow {
     }
 
     fn get_selected_fs_path(&self) -> Option<PathBuf> {
-        let private = self.imp();
-        let iter = private.view.get_selected_iter()?;
-        private.duplicates.get_fs_path(&iter)
+        let (_position, item) = self.imp().view.single_selected()?;
+        Some(item.path())
     }
 
-    fn get_path_and_name(&self, iter: &gtk::TreeIter) -> Result<(PathBuf, String), Box<dyn Error>> {
+    async fn do_rename(&self) -> Result<(), Box<dyn Error>> {
         let private = self.imp();
-        let path = private
-            .duplicates
-            .get_fs_path(&iter)
-            .ok_or("Cannot get path of the file")?;
-        let name = path
+        let Some((_position, item)) = private.view.single_selected() else {
+            return Ok(());
+        };
+
+        let old_path = item.path();
+        let old_name = old_path
             .file_name()
             .ok_or("Cannot get base name of the file")?
             .to_str()
             .ok_or("Cannot convert file name to string")?
             .to_owned();
-        Ok((path, name))
-    }
-
-    async fn do_rename(&self) -> Result<(), Box<dyn Error>> {
-        let private = self.imp();
-        let Some(iter) = private.view.get_selected_iter() else {
-            return Ok(());
-        };
-
-        let (old_path, old_name) = self.get_path_and_name(&iter)?;
 
         let Some(new_name) =
             user_interaction::prompt(self.upcast_ref(), "Rename file", "Name:", &old_name)
@@ -345,19 +348,8 @@ impl MainWindow {
 
         fs::rename(old_path, &new_path)?;
 
-        private.duplicates.set_path(&iter, &new_path);
+        item.init_path(&new_path);
 
-        Ok(())
-    }
-
-    fn delete_file_by_tree_iter(&self, iter: &gtk::TreeIter) -> Result<(), Box<dyn Error>> {
-        let private = self.imp();
-        let fs_path = private
-            .duplicates
-            .get_fs_path(&iter)
-            .ok_or("Cannot get path to file by iter.")?;
-        fs::remove_file(&fs_path)
-            .map_err(|e| format!("File {} cannot be removed. {}", fs_path.display(), e))?;
         Ok(())
     }
 
@@ -446,19 +438,17 @@ impl MainWindow {
     /// select all other duplicates from selected item folder
     fn select_from_same_directory(&self) {
         let private = self.imp();
-        if let Some(path) = self.get_selected_fs_path() {
-            if let Some(dir) = path.parent() {
-                for (_group, files) in private.duplicates.group_iter() {
-                    for file in files {
-                        if private
-                            .duplicates
-                            .get_fs_path(&file)
-                            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-                            == Some(dir.to_path_buf())
-                        {
-                            private.view.get_selection().select_iter(&file);
-                        }
+        if let Some(path) = self.get_selected_fs_path()
+            && let Some(dir) = path.parent()
+        {
+            let selection = private.view.selection();
+            let mut position = 0;
+            for group in private.duplicates.group_iter() {
+                for file in group.iter() {
+                    if file.path().parent() == Some(dir) {
+                        selection.select_item(position, false);
                     }
+                    position += 1;
                 }
             }
         }
@@ -490,43 +480,45 @@ impl MainWindow {
             }
         };
 
-        let selection = private.view.get_selection();
-        for (_group, files) in private.duplicates.group_iter() {
-            for file_iter in files {
-                let fs_path = private.duplicates.get_fs_path(&file_iter).unwrap();
+        let selection = private.view.selection();
+        let mut position = 0;
+        for group in private.duplicates.group_iter() {
+            for file in group.iter() {
+                let fs_path = file.path();
                 if pattern.matches_path(&fs_path) {
                     if select {
-                        selection.select_iter(&file_iter);
+                        selection.select_item(position, false);
                     } else {
-                        selection.unselect_iter(&file_iter);
+                        selection.unselect_item(position);
                     }
                 }
+                position += 1;
             }
         }
     }
 
     fn select_all_but(&self, which: String) {
-        fn find_row_to_unselect<'i>(
-            model: &duplicates_list::DuplicatesStore,
-            files: &'i [gtk::TreeIter],
-            which: &str,
-        ) -> Option<&'i gtk::TreeIter> {
-            match which {
-                "first" => files.first(),
-                "newest" => files.iter().max_by_key(|iter| model.modified(iter)),
-                "oldest" => files.iter().min_by_key(|iter| model.modified(iter)),
-                _ => None,
-            }
-        }
+        let skip = match which.as_str() {
+            "first" => ItemWithinGroup::First,
+            "newest" => ItemWithinGroup::Newest,
+            "oldest" => ItemWithinGroup::Oldest,
+            _ => return,
+        };
 
         let private = self.imp();
-        let selection = private.view.get_selection();
-        for (_group, files) in private.duplicates.group_iter() {
-            for file in &files {
-                selection.select_iter(file);
-            }
-            if let Some(unselect) = find_row_to_unselect(&private.duplicates, &files, &which) {
-                selection.unselect_iter(unselect);
+        let selection = private.view.selection();
+        let mut position = 0;
+        for group in private.duplicates.group_iter() {
+            let index_to_skip = match skip {
+                ItemWithinGroup::First => Some(0),
+                ItemWithinGroup::Newest => group.newest_position(),
+                ItemWithinGroup::Oldest => group.oldest_position(),
+            };
+            for (index, _file) in group.iter().enumerate() {
+                if Some(index) != index_to_skip {
+                    selection.select_item(position, false);
+                }
+                position += 1;
             }
         }
     }
@@ -534,24 +526,26 @@ impl MainWindow {
     fn select_toggle(&self) {
         let private = self.imp();
 
-        let selection = private.view.get_selection();
-        for iter in private.duplicates.iter() {
-            if !private.duplicates.is_group(&iter) {
-                if selection.iter_is_selected(&iter) {
-                    selection.unselect_iter(&iter);
+        let selection = private.view.selection();
+        let mut position = 0;
+        for group in private.duplicates.group_iter() {
+            for _file in group.iter() {
+                if selection.is_selected(position) {
+                    selection.unselect_item(position);
                 } else {
-                    selection.select_iter(&iter);
+                    selection.select_item(position, false);
                 }
+                position += 1;
             }
         }
     }
 
     fn unselect_all(&self) {
-        self.imp().view.get_selection().unselect_all();
+        self.imp().view.selection().unselect_all();
     }
 
     async fn delete(&self) {
-        let selected = self.imp().view.get_selected_iters();
+        let selected = self.imp().view.selected();
 
         let count = selected.len();
         if count == 0 {
@@ -562,15 +556,20 @@ impl MainWindow {
             return;
         }
 
-        let mut deleted: Vec<gtk::TreeIter> = Vec::new();
+        let mut deleted: HashSet<Duplicate> = HashSet::new();
         let mut errors = Vec::new();
-        for iter in selected {
-            match self.delete_file_by_tree_iter(&iter) {
+        for (_position, item) in selected {
+            let path = item.path();
+            match fs::remove_file(&path) {
                 Ok(_) => {
-                    deleted.push(iter);
+                    deleted.insert(item);
                 }
                 Err(error) => {
-                    errors.push(error);
+                    errors.push(format!(
+                        "File {} cannot be removed. {}",
+                        path.display(),
+                        error
+                    ));
                 }
             }
         }
