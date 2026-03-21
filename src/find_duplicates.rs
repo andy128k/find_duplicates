@@ -1,17 +1,16 @@
 use crate::exclusion::Exclusion;
-use humansize::{format_size, DECIMAL};
-use lazy_static::lazy_static;
+use humansize::{DECIMAL, format_size};
 use sha2::{
-    digest::{generic_array::GenericArray, OutputSizeUser},
     Digest, Sha256,
+    digest::{OutputSizeUser, generic_array::GenericArray},
 };
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{self, Metadata};
 use std::hash::Hash;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use std::{collections::HashMap, sync::LazyLock};
 
 #[derive(Debug)]
 pub struct FileInfo {
@@ -94,10 +93,8 @@ fn find_files_in_dirs(
 fn get_file_hash(
     fi: &FileInfo,
 ) -> io::Result<GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>> {
-    lazy_static! {
-        static ref EMPTY_HASH: GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize> =
-            Sha256::new().finalize();
-    }
+    static EMPTY_HASH: LazyLock<GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>> =
+        LazyLock::new(|| Sha256::new().finalize());
 
     if fi.size > 0 {
         let mut hasher = Sha256::new();

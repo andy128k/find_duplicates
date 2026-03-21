@@ -1,7 +1,10 @@
-use crate::gtk_prelude::*;
 use crate::utils::scrolled;
 use chrono::prelude::*;
-use gtk::gdk::ffi::GDK_BUTTON_SECONDARY;
+use gtk::{
+    gdk::{self, ffi::GDK_BUTTON_SECONDARY},
+    gio, glib,
+    prelude::*,
+};
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -204,8 +207,8 @@ impl Iterator for DuplicatesStoreIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.iter.as_ref()?.clone();
-        let next = current.clone();
-        if self.store.0.iter_next(&next) {
+        let mut next = current.clone();
+        if self.store.0.iter_next(&mut next) {
             self.iter = Some(next);
         } else {
             self.iter = None;
@@ -322,14 +325,21 @@ impl DuplicatesList {
 
         let popup_click = gtk::GestureClick::builder().build();
         popup_click.set_button(GDK_BUTTON_SECONDARY as u32);
-        self.tree_view.add_controller(&popup_click);
-
-        popup_click.connect_pressed(
-            clone!(@weak self.tree_view as view, @weak popup => move |_gesture, _n, x, y| {
+        popup_click.connect_pressed(glib::clone!(
+            #[weak(rename_to = view)]
+            self.tree_view,
+            #[weak]
+            popup,
+            move |_gesture, _n, x, y| {
                 view.grab_focus();
 
                 if let Some((Some(path), _, _, _)) = view.path_at_pos(x as i32, y as i32) {
-                    gtk::prelude::TreeViewExt::set_cursor(&view, &path, None::<&gtk::TreeViewColumn>, false);
+                    gtk::prelude::TreeViewExt::set_cursor(
+                        &view,
+                        &path,
+                        None::<&gtk::TreeViewColumn>,
+                        false,
+                    );
 
                     let row_rect = view.cell_area(Some(&path), None);
                     popup.set_pointing_to(Some(&gdk::Rectangle::new(
@@ -338,17 +348,13 @@ impl DuplicatesList {
                         0,
                         row_rect.height(),
                     )));
-                 } else {
-                    popup.set_pointing_to(Some(&gdk::Rectangle::new(
-                        x as i32,
-                        y as i32,
-                        0,
-                        0,
-                    )));
+                } else {
+                    popup.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 0, 0)));
                 }
                 popup.popup();
-            }),
-        );
+            }
+        ));
+        self.tree_view.add_controller(popup_click);
     }
 
     pub fn get_widget(&self) -> gtk::Widget {

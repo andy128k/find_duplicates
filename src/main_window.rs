@@ -1,14 +1,13 @@
 use crate::duplicates_list;
-use crate::exclusion::{Exclusion, DEFAULT_EXCLUDE_PATTERNS};
-use crate::find_duplicates::{duplication_status, find_duplicate_groups, DuplicatesGroup};
-use crate::gtk_prelude::*;
+use crate::exclusion::{DEFAULT_EXCLUDE_PATTERNS, Exclusion};
+use crate::find_duplicates::{DuplicatesGroup, duplication_status, find_duplicate_groups};
 use crate::options;
 use crate::path_choose;
 use crate::user_interaction::{self, ProgressDialog};
 use crate::utils::horizontal_expander;
 use crate::widgets::go_button::go_button;
 use crate::widgets::menu_builder::MenuBuilderExt;
-use gtk::subclass::prelude::*;
+use gtk::{gio, glib, pango, prelude::*, subclass::prelude::*};
 use std::cell::{Cell, RefCell};
 use std::env;
 use std::error::Error;
@@ -126,7 +125,6 @@ type FindResult = Result<Vec<DuplicatesGroup>, String>;
 
 mod imp {
     use super::*;
-    use gtk::glib::once_cell::sync::OnceCell;
 
     #[derive(Default)]
     pub struct MainWindow {
@@ -134,7 +132,6 @@ mod imp {
         pub duplicates: duplicates_list::DuplicatesStore,
         pub options: options::Options,
         pub view: duplicates_list::DuplicatesList,
-        pub find_sender: OnceCell<glib::Sender<FindResult>>,
         pub progress: RefCell<Option<ProgressDialog>>,
     }
 
@@ -181,19 +178,7 @@ mod imp {
 
             window.set_child(Some(&paned));
 
-            let (find_sender, find_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
-            self.find_sender.set(find_sender).unwrap();
-
             window.register_actions(&*window);
-            find_receiver.attach(
-                None,
-                clone!(@weak self as imp => @default-return glib::Continue(false), move |msg| {
-                    glib::MainContext::default().spawn_local(async move {
-                        imp.on_find_finished(msg).await;
-                    });
-                    glib::Continue(true)
-                }),
-            );
 
             for ignore in DEFAULT_EXCLUDE_PATTERNS.iter() {
                 window.add_excluded(ignore.clone());
@@ -208,7 +193,7 @@ mod imp {
     impl ApplicationWindowImpl for MainWindow {}
 
     impl MainWindow {
-        async fn on_find_finished(&self, msg: FindResult) {
+        pub async fn on_find_finished(&self, msg: FindResult) {
             if let Some(progress) = self.progress.borrow_mut().take() {
                 progress.close().await;
             }
@@ -241,7 +226,9 @@ mod imp {
 
 glib::wrapper! {
     pub struct MainWindow(ObjectSubclass<imp::MainWindow>)
-        @extends gtk::ApplicationWindow, gtk::Window, gtk::Widget, @implements gio::ActionMap;
+        @extends gtk::ApplicationWindow, gtk::Window, gtk::Widget,
+        @implements gtk::ConstraintTarget, gtk::Buildable, gtk::ShortcutManager, gtk::Accessible, gtk::Root, gtk::Native,
+            gio::ActionGroup, gio::ActionMap;
 }
 
 impl MainWindow {
@@ -281,7 +268,9 @@ impl MainWindow {
         }
 
         let pwd = env::current_dir().unwrap();
-        let Some(file_save_as) = path_choose::save_as(self.upcast_ref(), &pwd).await else { return Ok(()) };
+        let Some(file_save_as) = path_choose::save_as(self.upcast_ref(), &pwd).await else {
+            return Ok(());
+        };
 
         if file_save_as.exists() {
             if file_save_as.is_file() {
@@ -327,14 +316,19 @@ impl MainWindow {
 
     async fn do_rename(&self) -> Result<(), Box<dyn Error>> {
         let private = self.imp();
-        let Some(iter) = private.view.get_selected_iter() else { return Ok(()) };
+        let Some(iter) = private.view.get_selected_iter() else {
+            return Ok(());
+        };
 
         let (old_path, old_name) = self.get_path_and_name(&iter)?;
 
-        let Some(new_name) = user_interaction::prompt(self.upcast_ref(), "Rename file", "Name:", &old_name)
-            .await
-            .filter(|name| *name != old_name)
-            else { return Ok(()) };
+        let Some(new_name) =
+            user_interaction::prompt(self.upcast_ref(), "Rename file", "Name:", &old_name)
+                .await
+                .filter(|name| *name != old_name)
+        else {
+            return Ok(());
+        };
 
         let mut new_path = old_path.parent().unwrap().to_path_buf();
         new_path.push(new_name);
@@ -407,11 +401,14 @@ impl MainWindow {
         let progress = user_interaction::ProgressDialog::new(self.upcast_ref(), "Searching...");
         *private.progress.borrow_mut() = Some(progress);
 
-        let sender = private.find_sender.get().unwrap().clone();
+        let (sender, receiver) = async_channel::bounded(1);
         thread::spawn(move || {
             let duplicates = find_duplicate_groups(&search_dirs, &excluded, min_size, recurse);
-            let _ = sender.send(duplicates.map_err(|err| err.to_string()));
+            let _ = sender.send_blocking(duplicates.map_err(|err| err.to_string()));
         });
+        let msg = receiver.recv().await.map_err(|e| e.to_string()).flatten();
+
+        self.imp().on_find_finished(msg).await;
     }
 
     async fn open(&self) {
@@ -480,7 +477,9 @@ impl MainWindow {
         let Some(wildcard) = user_interaction::prompt(self.upcast_ref(), title, "Wildcard:", "*")
             .await
             .filter(|answer| !answer.is_empty())
-            else { return };
+        else {
+            return;
+        };
 
         let pattern = match glob::Pattern::new(&wildcard) {
             Ok(pattern) => pattern,

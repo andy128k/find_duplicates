@@ -1,9 +1,9 @@
 use crate::exclusion::Exclusion;
-use crate::gtk_prelude::*;
 use crate::path_choose::select_dir;
 use crate::string_list::StringList;
 use crate::user_interaction::prompt;
 use crate::utils::{horizontal_expander, scrolled};
+use gtk::{glib, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
@@ -62,15 +62,19 @@ fn add_directory_button(string_list: &StringList<Directory>) -> gtk::Button {
         .label("Add directory")
         .hexpand(false)
         .build();
-    button.connect_clicked(clone!(@weak string_list => move |button| {
-        if let Some(window) = get_window(button) {
-            glib::MainContext::default().spawn_local(async move {
-                if let Some(new_value) = pick_directory(&window).await {
-                    string_list.append(Directory(new_value));
-                }
-            });
+    button.connect_clicked(glib::clone!(
+        #[weak]
+        string_list,
+        move |button| {
+            if let Some(window) = get_window(button) {
+                glib::spawn_future_local(async move {
+                    if let Some(new_value) = pick_directory(&window).await {
+                        string_list.append(Directory(new_value));
+                    }
+                });
+            }
         }
-    }));
+    ));
     button
 }
 
@@ -79,15 +83,19 @@ fn add_excluded_directory_button(string_list: &StringList<Exclusion>) -> gtk::Bu
         .label("Add directory")
         .hexpand(false)
         .build();
-    button.connect_clicked(clone!(@weak string_list => move |button| {
-        if let Some(window) = get_window(button) {
-            glib::MainContext::default().spawn_local(async move {
-                if let Some(new_value) = pick_directory(&window).await {
-                    string_list.append(Exclusion::Directory(new_value));
-                }
-            });
+    button.connect_clicked(glib::clone!(
+        #[weak]
+        string_list,
+        move |button| {
+            if let Some(window) = get_window(button) {
+                glib::spawn_future_local(async move {
+                    if let Some(new_value) = pick_directory(&window).await {
+                        string_list.append(Exclusion::Directory(new_value));
+                    }
+                });
+            }
         }
-    }));
+    ));
     button
 }
 
@@ -96,15 +104,19 @@ fn add_exclusion_pattern_button(string_list: &StringList<Exclusion>) -> gtk::But
         .label("Add pattern")
         .hexpand(false)
         .build();
-    button.connect_clicked(clone!(@weak string_list => move |button| {
-        if let Some(window) = get_window(button) {
-            glib::MainContext::default().spawn_local(async move {
-                if let Some(new_value) = pick_pattern(&window).await {
-                    string_list.append(Exclusion::Pattern(new_value));
-                }
-            });
+    button.connect_clicked(glib::clone!(
+        #[weak]
+        string_list,
+        move |button| {
+            if let Some(window) = get_window(button) {
+                glib::spawn_future_local(async move {
+                    if let Some(new_value) = pick_pattern(&window).await {
+                        string_list.append(Exclusion::Pattern(new_value));
+                    }
+                });
+            }
         }
-    }));
+    ));
     button
 }
 
@@ -113,16 +125,20 @@ fn remove_selection_button<T: ToString + 'static>(string_list: &StringList<T>) -
         .label("Remove")
         .hexpand(false)
         .build();
-    button.connect_clicked(clone!(@weak string_list => move |_|
-        string_list.remove_selection()
+    button.connect_clicked(glib::clone!(
+        #[weak]
+        string_list,
+        move |_| string_list.remove_selection()
     ));
     button
 }
 
 fn clear_button<T: ToString + 'static>(string_list: &StringList<T>) -> gtk::Button {
     let button = gtk::Button::builder().label("Clear").hexpand(false).build();
-    button.connect_clicked(clone!(@weak string_list => move |_|
-        string_list.clear()
+    button.connect_clicked(glib::clone!(
+        #[weak]
+        string_list,
+        move |_| string_list.clear()
     ));
     button
 }

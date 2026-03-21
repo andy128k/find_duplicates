@@ -1,7 +1,7 @@
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::string::ToString;
+use std::sync::LazyLock;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Exclusion {
@@ -18,8 +18,8 @@ impl ToString for Exclusion {
     }
 }
 
-lazy_static! {
-    pub static ref DEFAULT_EXCLUDE_PATTERNS: [Exclusion; 12] = [
+pub static DEFAULT_EXCLUDE_PATTERNS: LazyLock<[Exclusion; 12]> = LazyLock::new(|| {
+    [
         Exclusion::Directory("/lost+found".into()),
         Exclusion::Directory("/dev".into()),
         Exclusion::Directory("/proc".into()),
@@ -32,5 +32,5 @@ lazy_static! {
         Exclusion::Pattern("*/.bzr".into()),
         Exclusion::Pattern("*/node_modules".into()),
         Exclusion::Pattern("*/target".into()),
-    ];
-}
+    ]
+});

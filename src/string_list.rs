@@ -1,5 +1,5 @@
-use crate::gtk_prelude::*;
 use crate::utils::BitsetExt;
+use gtk::{gio, glib, prelude::*};
 use std::marker::PhantomData;
 
 fn label_factory(
@@ -7,22 +7,32 @@ fn label_factory(
 ) -> gtk::ListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     factory.connect_setup(|_, list_item| {
-        list_item.set_child(Some(
-            &gtk::Label::builder().halign(gtk::Align::Start).build(),
-        ))
+        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() {
+            list_item.set_child(Some(
+                &gtk::Label::builder().halign(gtk::Align::Start).build(),
+            ))
+        }
     });
     factory.connect_bind(move |_, list_item| {
-        if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
-            let text = list_item.item().and_then(|obj| display(&obj));
-            label.set_text(text.as_deref().unwrap_or_default());
+        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() {
+            if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
+                let text = list_item.item().and_then(|obj| display(&obj));
+                label.set_text(text.as_deref().unwrap_or_default());
+            }
         }
     });
     factory.connect_unbind(|_, list_item| {
-        if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
-            label.set_text("");
+        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() {
+            if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
+                label.set_text("");
+            }
         }
     });
-    factory.connect_teardown(|_, list_item| list_item.set_child(gtk::Widget::NONE));
+    factory.connect_teardown(|_, list_item| {
+        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() {
+            list_item.set_child(gtk::Widget::NONE);
+        }
+    });
     factory.upcast()
 }
 
@@ -36,9 +46,9 @@ fn display_boxed<T: ToString + 'static>(obj: &glib::Object) -> Option<String> {
 
 impl<T: ToString + 'static> StringList<T> {
     pub fn new() -> Self {
-        let model = gio::ListStore::new(glib::BoxedAnyObject::static_type());
+        let model = gio::ListStore::new::<glib::BoxedAnyObject>();
 
-        let selection_model = gtk::MultiSelection::new(Some(&model));
+        let selection_model = gtk::MultiSelection::new(Some(model.clone()));
 
         let factory = label_factory(display_boxed::<T>);
 
@@ -81,7 +91,6 @@ impl<T: ToString + Clone + 'static> StringList<T> {
     pub fn to_vec(&self) -> Vec<T> {
         self.get_model()
             .iter::<glib::BoxedAnyObject>()
-            .unwrap()
             .map(|bx| (*bx.unwrap().borrow::<T>()).clone())
             .collect()
     }

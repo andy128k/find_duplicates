@@ -1,5 +1,5 @@
-use crate::gtk_prelude::*;
 use crate::main_window::MainWindow;
+use gtk::{gio, prelude::*};
 
 pub fn create_application() -> gtk::Application {
     let app = gtk::Application::builder()
@@ -12,7 +12,7 @@ pub fn create_application() -> gtk::Application {
         if let Ok(directory) = std::env::current_dir() {
             app_window.add_directory(&directory);
         }
-        app_window.show();
+        app_window.present();
     });
 
     app

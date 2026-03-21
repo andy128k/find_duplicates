@@ -1,5 +1,5 @@
-use crate::gtk_prelude::*;
 use crate::utils::{pending, scrolled};
+use gtk::{glib, prelude::*};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -117,16 +117,15 @@ pub async fn confirm(parent: &gtk::Window, message: &str) -> bool {
 }
 
 pub async fn notify(message_type: gtk::MessageType, parent: &gtk::Window, message: &str) {
-    let dlg = gtk::MessageDialog::builder()
-        .message_type(message_type)
-        .transient_for(parent)
-        .text(message)
-        .buttons(gtk::ButtonsType::Ok)
-        .build();
-    dlg.show();
-    dlg.run_future().await;
-    dlg.close();
-    pending().await;
+    let _ = gtk::AlertDialog::builder()
+        .modal(true)
+        .message(message)
+        .buttons(["OK"])
+        .default_button(0)
+        .cancel_button(0)
+        .build()
+        .choose_future(Some(parent))
+        .await;
 }
 
 pub async fn notify_info(parent: &gtk::Window, message: &str) {
@@ -173,20 +172,19 @@ pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str)
 }
 
 pub struct ProgressDialog {
-    dlg: gtk::Dialog,
+    dlg: gtk::Window,
     running: Rc<Cell<bool>>,
 }
 
 impl ProgressDialog {
     pub fn new(parent: &gtk::Window, title: &str) -> Self {
-        let dlg = gtk::Dialog::builder()
+        let dlg = gtk::Window::builder()
             .title(title)
             .transient_for(parent)
             .modal(true)
             .resizable(false)
             .destroy_with_parent(false)
             .decorated(true)
-            .use_header_bar(1)
             .deletable(false)
             .width_request(400)
             .build();
@@ -197,27 +195,38 @@ impl ProgressDialog {
             .margin_top(30)
             .margin_bottom(30)
             .build();
-
-        progress_bar.set_parent(&dlg.content_area());
+        dlg.set_child(Some(&progress_bar));
 
         let running = Rc::new(Cell::new(true));
-        dlg.connect_close_request(
-            clone!(@weak running => @default-return glib::signal::Inhibit(false), move |_dlg| {
-                glib::signal::Inhibit(running.get())
-            }),
+        dlg.connect_close_request(glib::clone!(
+            #[weak]
+            running,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_dlg| {
+                if running.get() {
+                    glib::Propagation::Stop
+                } else {
+                    glib::Propagation::Proceed
+                }
+            }
+        ));
+
+        glib::timeout_add_local(
+            Duration::from_millis(100),
+            glib::clone!(
+                #[weak]
+                progress_bar,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    progress_bar.pulse();
+                    glib::ControlFlow::Continue
+                }
+            ),
         );
 
-        let weak_progress_bar = progress_bar.downgrade();
-        glib::timeout_add_local(Duration::from_millis(100), move || {
-            if let Some(progress_bar) = weak_progress_bar.upgrade() {
-                progress_bar.pulse();
-                glib::Continue(true)
-            } else {
-                glib::Continue(false)
-            }
-        });
-
-        dlg.show();
+        dlg.present();
 
         Self { dlg, running }
     }
