@@ -33,9 +33,9 @@ pub trait BitsetExt {
 impl BitsetExt for gtk::Bitset {
     fn to_vec(&self) -> Vec<u32> {
         let mut indexes = Vec::new();
-        if let Some((mut iter, position)) = gtk::BitsetIter::init_first(self) {
+        if let Some((iter, position)) = gtk::BitsetIter::init_first(self) {
             indexes.push(position);
-            while let Some(position) = iter.next() {
+            for position in iter {
                 indexes.push(position);
             }
         }
@@ -54,5 +54,25 @@ impl<T> SenderExt<T> for async_channel::Sender<T> {
         {
             eprintln!("Failed to send a message: {error}");
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_bitset_to_vec() {
+        gtk::init().unwrap();
+
+        let bitset = gtk::Bitset::new_empty();
+        assert_eq!(bitset.to_vec(), vec![]);
+
+        let bitset = gtk::Bitset::new_empty();
+        bitset.add(42);
+        bitset.add(47);
+        bitset.add(7);
+
+        assert_eq!(bitset.to_vec(), vec![7, 42, 47]);
     }
 }

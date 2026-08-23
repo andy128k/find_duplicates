@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::string::ToString;
-use std::sync::LazyLock;
+use std::{fmt, path::PathBuf, sync::LazyLock};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Exclusion {
@@ -9,11 +7,11 @@ pub enum Exclusion {
     Pattern(String),
 }
 
-impl ToString for Exclusion {
-    fn to_string(&self) -> String {
+impl fmt::Display for Exclusion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Directory(dir) => dir.display().to_string(),
-            Self::Pattern(pattern) => pattern.clone(),
+            Self::Directory(dir) => write!(f, "{}", dir.display()),
+            Self::Pattern(pattern) => write!(f, "{}", pattern),
         }
     }
 }

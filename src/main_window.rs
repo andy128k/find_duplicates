@@ -251,7 +251,8 @@ mod imp {
 
     impl MainWindow {
         pub async fn on_find_finished(&self, msg: FindResult) {
-            if let Some(progress) = self.progress.borrow_mut().take() {
+            let progress = self.progress.borrow_mut().take();
+            if let Some(progress) = progress {
                 progress.close().await;
             }
 
@@ -451,9 +452,7 @@ impl MainWindow {
 
     async fn open(&self) {
         if let Some(path) = self.get_selected_fs_path() {
-            if let Err(error) = xdg_open(&path) {
-                self.show_error(error).await;
-            }
+            self.xdg_open(&path).await
         }
     }
 
@@ -462,9 +461,13 @@ impl MainWindow {
             .get_selected_fs_path()
             .and_then(|path| path.parent().map(|p| p.to_path_buf()))
         {
-            if let Err(error) = xdg_open(&dir) {
-                self.show_error(error).await;
-            }
+            self.xdg_open(&dir).await
+        }
+    }
+
+    async fn xdg_open(&self, dest: &Path) {
+        if let Err(error) = xdg_open(dest) {
+            self.show_error(error).await;
         }
     }
 

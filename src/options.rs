@@ -5,15 +5,17 @@ use crate::user_interaction::prompt;
 use crate::utils::{horizontal_expander, scrolled};
 use gtk::{glib, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use std::string::ToString;
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Directory(PathBuf);
 
-impl ToString for Directory {
-    fn to_string(&self) -> String {
-        self.0.display().to_string()
+impl fmt::Display for Directory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.display())
     }
 }
 
@@ -44,12 +46,12 @@ fn get_window(widget: &impl IsA<gtk::Widget>) -> Option<gtk::Window> {
 
 async fn pick_directory(window: &gtk::Window) -> Option<PathBuf> {
     let pwd = std::env::current_dir().ok()?;
-    let path = select_dir(&window, &pwd).await?;
+    let path = select_dir(window, &pwd).await?;
     Some(path)
 }
 
 async fn pick_pattern(window: &gtk::Window) -> Option<String> {
-    prompt(&window, "Add pattern", "Pattern", "")
+    prompt(window, "Add pattern", "Pattern", "")
         .await
         .filter(|p| !p.is_empty())
 }

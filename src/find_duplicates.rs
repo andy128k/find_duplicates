@@ -127,7 +127,7 @@ fn group_by<K: Hash + Eq>(
     let mut groups: HashMap<K, Vec<FileInfo>> = HashMap::new();
     for fi in fis {
         let key = get_key(&fi)?;
-        groups.entry(key).or_insert_with(Vec::new).push(fi);
+        groups.entry(key).or_default().push(fi);
     }
     groups.retain(|_, fis| fis.len() >= 2);
     Ok(groups.drain().map(|(_k, v)| v).collect())
@@ -209,7 +209,7 @@ pub fn find_duplicate_groups(
         .map(exclusion_to_pattern)
         .collect::<Result<_, _>>()?;
 
-    let duplicates1 = find_duplicates(&paths, &exclude, min_size, recurse)?;
+    let duplicates1 = find_duplicates(paths, &exclude, min_size, recurse)?;
 
     let mut duplicates: Vec<DuplicatesGroup> = vec![];
     for dup in duplicates1 {

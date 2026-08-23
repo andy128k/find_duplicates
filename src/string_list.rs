@@ -14,18 +14,18 @@ fn label_factory(
         }
     });
     factory.connect_bind(move |_, list_item| {
-        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() {
-            if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
-                let text = list_item.item().and_then(|obj| display(&obj));
-                label.set_text(text.as_deref().unwrap_or_default());
-            }
+        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>()
+            && let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>()
+        {
+            let text = list_item.item().and_then(|obj| display(&obj));
+            label.set_text(text.as_deref().unwrap_or_default());
         }
     });
     factory.connect_unbind(|_, list_item| {
-        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() {
-            if let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>() {
-                label.set_text("");
-            }
+        if let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>()
+            && let Some(label) = list_item.child().and_downcast_ref::<gtk::Label>()
+        {
+            label.set_text("");
         }
     });
     factory.connect_teardown(|_, list_item| {
