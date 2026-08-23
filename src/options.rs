@@ -49,12 +49,9 @@ async fn pick_directory(window: &gtk::Window) -> Option<PathBuf> {
 }
 
 async fn pick_pattern(window: &gtk::Window) -> Option<String> {
-    let pattern = prompt(&window, "Add pattern", "pattern", "").await?;
-    if pattern.is_empty() {
-        None
-    } else {
-        Some(pattern)
-    }
+    prompt(&window, "Add pattern", "Pattern", "")
+        .await
+        .filter(|p| !p.is_empty())
 }
 
 fn add_directory_button(string_list: &StringList<Directory>) -> gtk::Button {

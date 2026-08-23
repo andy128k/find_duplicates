@@ -1,20 +1,8 @@
-use crate::utils::{pending, scrolled};
+use crate::utils::{SenderExt, pending, scrolled};
 use gtk::{glib, prelude::*};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
-
-fn dialog(parent: &gtk::Window, title: &str) -> gtk::Dialog {
-    gtk::Dialog::builder()
-        .title(title)
-        .transient_for(parent)
-        .modal(true)
-        .resizable(false)
-        .destroy_with_parent(false)
-        .decorated(true)
-        .use_header_bar(1)
-        .build()
-}
 
 pub async fn prompt(
     parent: &gtk::Window,
@@ -22,22 +10,26 @@ pub async fn prompt(
     message: &str,
     value: &str,
 ) -> Option<String> {
-    let dlg = dialog(parent, title);
-
-    dlg.add_button("Cancel", gtk::ResponseType::Cancel);
-    dlg.add_button("Ok", gtk::ResponseType::Ok);
-    dlg.set_default_response(gtk::ResponseType::Ok);
+    let dlg = gtk::Window::builder()
+        .title(title)
+        .transient_for(parent)
+        .modal(true)
+        .resizable(false)
+        .destroy_with_parent(false)
+        .decorated(true)
+        .width_request(300)
+        .build();
 
     let container = gtk::Box::builder()
         .homogeneous(false)
         .orientation(gtk::Orientation::Vertical)
-        .spacing(8)
-        .margin_start(20)
-        .margin_end(20)
-        .margin_top(20)
-        .margin_bottom(20)
+        .spacing(6)
+        .margin_start(12)
+        .margin_end(12)
+        .margin_top(12)
+        .margin_bottom(12)
         .build();
-    container.set_parent(&dlg.content_area());
+    dlg.set_child(Some(&container));
 
     let label = gtk::Label::builder()
         .label(message)
@@ -52,9 +44,50 @@ pub async fn prompt(
         .build();
     container.append(&entry);
 
-    dlg.show();
-    let result = match dlg.run_future().await {
-        gtk::ResponseType::Ok => Some(entry.text().to_string()),
+    let (sender, receiver) = async_channel::bounded::<bool>(1);
+    dlg.connect_destroy(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(false)
+    ));
+
+    let button_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .vexpand(true)
+        .valign(gtk::Align::End)
+        .build();
+    container.append(&button_box);
+    let button_group = gtk::SizeGroup::new(gtk::SizeGroupMode::Both);
+
+    let cancel_button = gtk::Button::builder()
+        .label("Cancel")
+        .hexpand(true)
+        .halign(gtk::Align::End)
+        .build();
+    button_box.append(&cancel_button);
+    button_group.add_widget(&cancel_button);
+    cancel_button.connect_clicked(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(false)
+    ));
+
+    let ok_button = gtk::Button::builder()
+        .label("OK")
+        .receives_default(true)
+        .build();
+    button_box.append(&ok_button);
+    button_group.add_widget(&ok_button);
+    ok_button.connect_clicked(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(true)
+    ));
+
+    dlg.present();
+    let result = match receiver.recv().await {
+        Ok(true) => Some(entry.text().to_string()),
         _ => None,
     };
     dlg.close();
@@ -63,21 +96,26 @@ pub async fn prompt(
 }
 
 pub async fn confirm_delete(parent: &gtk::Window, message: &str) -> (bool, bool) {
-    let dlg = dialog(parent, "Delete");
-    let yes = dlg.add_button("Delete", gtk::ResponseType::Ok);
-    yes.style_context().add_class("destructive-action");
-    dlg.add_button("Cancel", gtk::ResponseType::Cancel);
+    let dlg = gtk::Window::builder()
+        .title("Delete")
+        .transient_for(parent)
+        .modal(true)
+        .resizable(false)
+        .destroy_with_parent(false)
+        .decorated(true)
+        .width_request(300)
+        .build();
 
     let container = gtk::Box::builder()
         .homogeneous(false)
         .orientation(gtk::Orientation::Vertical)
-        .spacing(8)
-        .margin_start(20)
-        .margin_end(20)
-        .margin_top(20)
-        .margin_bottom(20)
+        .spacing(6)
+        .margin_start(12)
+        .margin_end(12)
+        .margin_top(12)
+        .margin_bottom(12)
         .build();
-    container.set_parent(&dlg.content_area());
+    dlg.set_child(Some(&container));
 
     let label = gtk::Label::builder()
         .label(message)
@@ -92,31 +130,70 @@ pub async fn confirm_delete(parent: &gtk::Window, message: &str) -> (bool, bool)
         .build();
     container.append(&again);
 
-    dlg.show();
-    let response = dlg.run_future().await;
+    let (sender, receiver) = async_channel::bounded::<bool>(1);
+    dlg.connect_destroy(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(false)
+    ));
+
+    let button_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .vexpand(true)
+        .valign(gtk::Align::End)
+        .build();
+    container.append(&button_box);
+    let button_group = gtk::SizeGroup::new(gtk::SizeGroupMode::Both);
+
+    let cancel_button = gtk::Button::builder()
+        .label("Cancel")
+        .hexpand(true)
+        .halign(gtk::Align::End)
+        .build();
+    button_box.append(&cancel_button);
+    button_group.add_widget(&cancel_button);
+    cancel_button.connect_clicked(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(false)
+    ));
+
+    let ok_button = gtk::Button::builder()
+        .label("Delete")
+        .receives_default(true)
+        .build();
+    ok_button.add_css_class("destructive-action");
+    button_box.append(&ok_button);
+    button_group.add_widget(&ok_button);
+    ok_button.connect_clicked(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(true)
+    ));
+
+    dlg.present();
+    let allow_delete = matches!(receiver.recv().await, Ok(true));
     let ask_again = again.is_active();
     dlg.close();
     pending().await;
 
-    let allow_delete = response == gtk::ResponseType::Ok;
     (allow_delete, ask_again)
 }
 
 pub async fn confirm(parent: &gtk::Window, message: &str) -> bool {
-    let dlg = gtk::MessageDialog::builder()
-        .message_type(gtk::MessageType::Question)
-        .transient_for(parent)
-        .text(message)
-        .buttons(gtk::ButtonsType::YesNo)
+    let dlg = gtk::AlertDialog::builder()
+        .modal(true)
+        .message(message)
+        .buttons(["No", "Yes"])
+        .cancel_button(0)
+        .default_button(1)
         .build();
-    dlg.show();
-    let result = dlg.run_future().await;
-    dlg.close();
-    pending().await;
-    result == gtk::ResponseType::Yes
+    let result = dlg.choose_future(Some(parent)).await;
+    result == Ok(1)
 }
 
-pub async fn notify(message_type: gtk::MessageType, parent: &gtk::Window, message: &str) {
+pub async fn notify(_message_type: gtk::MessageType, parent: &gtk::Window, message: &str) {
     let _ = gtk::AlertDialog::builder()
         .modal(true)
         .message(message)
@@ -137,15 +214,34 @@ pub async fn notify_error(parent: &gtk::Window, message: &str) {
 }
 
 pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str) {
-    let dlg = gtk::MessageDialog::builder()
-        .message_type(gtk::MessageType::Info)
+    let dlg = gtk::Window::builder()
+        .title("Delete")
         .transient_for(parent)
-        .text(message)
-        .buttons(gtk::ButtonsType::Ok)
+        .modal(true)
+        .resizable(true)
+        .destroy_with_parent(false)
+        .decorated(true)
         .width_request(600)
         .height_request(400)
-        .resizable(true)
         .build();
+
+    let container = gtk::Box::builder()
+        .homogeneous(false)
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(6)
+        .margin_start(12)
+        .margin_end(12)
+        .margin_top(12)
+        .margin_bottom(12)
+        .build();
+    dlg.set_child(Some(&container));
+
+    let label = gtk::Label::builder()
+        .label(message)
+        .xalign(0.0_f32)
+        .yalign(0.5_f32)
+        .build();
+    container.append(&label);
 
     let text_view = gtk::TextView::builder()
         .can_focus(true)
@@ -163,11 +259,38 @@ pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str)
     text_view.buffer().set_text(details);
 
     let scrolled_window = scrolled(&text_view, true);
-    scrolled_window.set_parent(&dlg.content_area());
+    scrolled_window.set_parent(&container);
 
-    dlg.show();
-    dlg.run_future().await;
+    let (sender, receiver) = async_channel::bounded::<()>(1);
+    dlg.connect_destroy(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(())
+    ));
+
+    let button_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .vexpand(true)
+        .valign(gtk::Align::End)
+        .build();
+    container.append(&button_box);
+
+    let ok_button = gtk::Button::builder()
+        .label("OK")
+        .receives_default(true)
+        .build();
+    button_box.append(&ok_button);
+    ok_button.connect_clicked(glib::clone!(
+        #[strong]
+        sender,
+        move |_| sender.toss(())
+    ));
+
+    dlg.present();
+    let _ = receiver.recv().await;
     dlg.close();
+
     pending().await;
 }
 

@@ -42,3 +42,17 @@ impl BitsetExt for gtk::Bitset {
         indexes
     }
 }
+
+pub trait SenderExt<T> {
+    fn toss(&self, message: T);
+}
+
+impl<T> SenderExt<T> for async_channel::Sender<T> {
+    fn toss(&self, message: T) {
+        if !self.is_closed()
+            && let Err(error) = self.try_send(message)
+        {
+            eprintln!("Failed to send a message: {error}");
+        }
+    }
+}
