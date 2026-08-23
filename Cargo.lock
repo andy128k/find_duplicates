@@ -30,17 +30,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "awesome-glib"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b50d09aed3cffe7df95251a31d70131320516b241e567c33e01d4a5725ca1388"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "bincode"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -239,7 +228,6 @@ name = "find_duplicates_gui"
 version = "0.1.0"
 dependencies = [
  "async-channel",
- "awesome-glib",
  "bincode",
  "chrono",
  "glob",

@@ -44,17 +44,17 @@ fn action_buttons() -> gtk::Widget {
     row.append(&gtk::Label::builder().hexpand(true).build());
 
     let menu = gio::Menu::new()
-        .item("Select using wildcard", "win.select_wildcard(true)")
-        .item("Unselect using wildcard", "win.select_wildcard(false)")
+        .item("Select using wildcard", "win.select-wildcard(true)")
+        .item("Unselect using wildcard", "win.select-wildcard(false)")
         .submenu(
             "Select within groups",
             gio::Menu::new()
-                .item("Select all but first", r#"win.select_all_but("first")"#)
-                .item("Select all but newest", r#"win.select_all_but("newest")"#)
-                .item("Select all but oldest", r#"win.select_all_but("oldest")"#),
+                .item("Select all but first", r#"win.select-all-but("first")"#)
+                .item("Select all but newest", r#"win.select-all-but("newest")"#)
+                .item("Select all but oldest", r#"win.select-all-but("oldest")"#),
         )
-        .item("Toggle selection", "win.select_toggle")
-        .item("Unselect all", "win.unselect_all");
+        .item("Toggle selection", "win.select-toggle")
+        .item("Unselect all", "win.unselect-all");
 
     let select = gtk::MenuButton::builder()
         .label("Select")
@@ -121,12 +121,12 @@ fn panes(sidebar: &gtk::Widget, main: &gtk::Widget) -> gtk::Widget {
 fn duplicates_popup() -> gio::Menu {
     gio::Menu::new()
         .item("Open", "win.open")
-        .item("Open directory", "win.open_directory")
+        .item("Open directory", "win.open-directory")
         .item("Copy", "win.copy")
         .item("Rename...", "win.rename")
         .item(
             "Select all in this directory",
-            "win.select_from_same_directory",
+            "win.select-from-same-directory",
         )
 }
 
@@ -149,6 +149,56 @@ mod imp {
         const NAME: &'static str = "MainWindow";
         type Type = super::MainWindow;
         type ParentType = gtk::ApplicationWindow;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.install_action_async(
+                "win.find",
+                None,
+                |win, _, _| async move { win.find().await },
+            );
+            klass.install_action_async(
+                "win.open",
+                None,
+                |win, _, _| async move { win.open().await },
+            );
+            klass.install_action_async("win.open-directory", None, |win, _, _| async move {
+                win.open_directory().await
+            });
+            klass.install_action("win.copy", None, |win, _, _| win.copy());
+            klass.install_action_async("win.rename", None, |win, _, _| async move {
+                win.rename().await
+            });
+            klass.install_action("win.select-from-same-directory", None, |win, _, _| {
+                win.select_from_same_directory()
+            });
+            klass.install_action_async(
+                "win.select-wildcard",
+                Some(&bool::static_variant_type()),
+                |win, _, p| async move {
+                    let select = p.and_then(|v| v.get()) == Some(true);
+                    win.select_wildcard(select).await;
+                },
+            );
+            klass.install_action(
+                "win.select-all-but",
+                Some(&String::static_variant_type()),
+                |win, _, p| {
+                    if let Some(all_but) = p.and_then(|v| v.get()) {
+                        win.select_all_but(all_but);
+                    }
+                },
+            );
+            klass.install_action("win.select-toggle", None, |win, _, _| win.select_toggle());
+            klass.install_action("win.unselect-all", None, |win, _, _| win.unselect_all());
+            klass.install_action_async("win.delete", None, |win, _, _| async move {
+                win.delete().await
+            });
+            klass.install_action_async(
+                "win.save",
+                None,
+                |win, _, _| async move { win.save().await },
+            );
+        }
     }
 
     impl ObjectImpl for MainWindow {
@@ -186,8 +236,6 @@ mod imp {
             );
 
             window.set_child(Some(&paned));
-
-            window.register_actions(&*window);
 
             for ignore in DEFAULT_EXCLUDE_PATTERNS.iter() {
                 window.add_excluded(ignore.clone());
@@ -372,10 +420,7 @@ impl MainWindow {
     async fn show_error(&self, message: impl ToString) {
         user_interaction::notify_error(self.upcast_ref(), &message.to_string()).await;
     }
-}
 
-#[awesome_glib::actions]
-impl MainWindow {
     async fn find(&self) {
         let private = self.imp();
 
