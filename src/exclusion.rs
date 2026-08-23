@@ -1,7 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::{fmt, path::PathBuf, sync::LazyLock};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub enum Exclusion {
     Directory(PathBuf),
     Pattern(String),

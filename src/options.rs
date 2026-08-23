@@ -4,13 +4,12 @@ use crate::string_list::StringList;
 use crate::user_interaction::prompt;
 use crate::utils::{horizontal_expander, scrolled};
 use gtk::{glib, prelude::*};
-use serde::{Deserialize, Serialize};
 use std::{
     fmt,
     path::{Path, PathBuf},
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 struct Directory(PathBuf);
 
 impl fmt::Display for Directory {
