@@ -1,5 +1,5 @@
 use crate::exclusion::Exclusion;
-use humansize::{DECIMAL, format_size};
+use gtk::glib;
 use sha2::{
     Digest, Sha256,
     digest::{OutputSizeUser, generic_array::GenericArray},
@@ -232,7 +232,7 @@ pub fn duplication_status(dups: &[DuplicatesGroup]) -> String {
 
     format!(
         "{} wasted in {} files (in {} groups)",
-        format_size(waste_bytes, DECIMAL),
+        glib::format_size(waste_bytes),
         waste_count,
         dups.len()
     )

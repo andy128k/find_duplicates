@@ -70,10 +70,10 @@ mod imp {
                 .map(|d| d.size())
                 .unwrap_or_default();
             self.label.set_label(&format!(
-                "{} files x {} bytes ({} bytes wasted)",
+                "{} files x {} ({} wasted)",
                 group_size,
-                file_size,
-                (group_size - 1) as u64 * file_size
+                glib::format_size(file_size),
+                glib::format_size((group_size - 1) as u64 * file_size)
             ));
         }
     }
