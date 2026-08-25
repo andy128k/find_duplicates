@@ -1,7 +1,9 @@
-use std::{path::Path, time::SystemTime};
-
-use chrono::{DateTime, Local};
 use gtk::glib::{self, prelude::*, subclass::prelude::*};
+use std::{
+    error::Error,
+    path::Path,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 mod imp {
     use super::*;
@@ -18,13 +20,13 @@ mod imp {
         #[property(get, set)]
         directory: RefCell<String>,
         #[property(get, set)]
-        time: RefCell<String>,
+        modified_string: RefCell<Option<String>>,
         #[property(get, set)]
         size: Cell<u64>,
         #[property(get, set)]
         path: RefCell<PathBuf>,
-        #[property(get, set)]
-        modified: RefCell<String>,
+        #[property(get, set, nullable)]
+        modified: RefCell<Option<glib::DateTime>>,
     }
 
     #[glib::object_subclass]
@@ -42,24 +44,25 @@ glib::wrapper! {
 }
 
 impl Duplicate {
-    pub fn new(path1: &Path, modified: SystemTime, file_size: u64) -> Self {
-        let date: DateTime<Local> = modified.into();
+    pub fn new(path: &Path, modified: SystemTime, file_size: u64) -> Self {
+        let date = system_to_glib(modified)
+            .inspect_err(|error| eprintln!("Bad date {error}"))
+            .ok();
+        let date_string = date
+            .as_ref()
+            .map(format_date)
+            .transpose()
+            .inspect_err(|error| eprintln!("Bad date format {error}"))
+            .ok()
+            .flatten();
 
         let this: Self = glib::Object::builder()
-            .property(
-                "time",
-                if Local::now().signed_duration_since(date) > chrono::Duration::days(182) {
-                    date.format("%b %e %Y")
-                } else {
-                    date.format("%b %e")
-                }
-                .to_string(),
-            )
-            .property("modified", date.to_rfc3339())
+            .property("modified", date)
+            .property("modified-string", date_string)
             .property("size", file_size)
             .build();
 
-        this.init_path(path1);
+        this.init_path(path);
         this
     }
 
@@ -68,10 +71,21 @@ impl Duplicate {
         self.set_directory(path.parent().unwrap().to_str().unwrap());
         self.set_path(path);
     }
+}
 
-    pub fn modified_date(&self) -> DateTime<Local> {
-        DateTime::parse_from_rfc3339(&self.modified())
-            .unwrap()
-            .with_timezone(&Local)
-    }
+fn system_to_glib(time: SystemTime) -> Result<glib::DateTime, Box<dyn Error>> {
+    let timestamp = time.duration_since(UNIX_EPOCH)?.as_secs();
+    let timestamp_signed: i64 = timestamp.try_into()?;
+    let date = glib::DateTime::from_unix_utc(timestamp_signed)?;
+    Ok(date)
+}
+
+fn format_date(date: &glib::DateTime) -> Result<String, Box<dyn Error>> {
+    let now = glib::DateTime::now_local()?;
+    let format = if now.year() != date.year() {
+        "%b %e %Y"
+    } else {
+        "%b %e"
+    };
+    Ok(date.format(format)?.to_string())
 }

@@ -28,19 +28,19 @@ impl Duplicates {
     pub fn newest_position(&self) -> Option<usize> {
         self.iter()
             .enumerate()
-            .max_by_key(|(_i, item)| item.modified_date())
+            .max_by_key(|(_i, item)| item.modified())
             .map(|(i, _item)| i)
     }
 
     pub fn oldest_position(&self) -> Option<usize> {
         self.iter()
             .enumerate()
-            .min_by_key(|(_i, item)| item.modified_date())
+            .min_by_key(|(_i, item)| item.modified())
             .map(|(i, _item)| i)
     }
 
-    pub fn append_file(&self, path1: &Path, modified: SystemTime, file_size: u64) {
-        let item = Duplicate::new(path1, modified, file_size);
+    pub fn append_file(&self, path: &Path, modified: SystemTime, file_size: u64) {
+        let item = Duplicate::new(path, modified, file_size);
         self.0.append(&item);
     }
 
@@ -148,7 +148,7 @@ mod imp {
 
             self.view.append_column(&column("Name", "name"));
             self.view.append_column(&column("Directory", "directory"));
-            self.view.append_column(&column("Date", "time"));
+            self.view.append_column(&column("Date", "modified-string"));
 
             let scrolled_window = scrolled(&self.view, false);
             scrolled_window.set_parent(&*this);

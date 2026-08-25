@@ -8,7 +8,6 @@ edition = "2024"
 gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 
 glob = "0.3"
-chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 humansize = "2"
 async-channel = "2.5.0"
 sha2 = "0.10"
