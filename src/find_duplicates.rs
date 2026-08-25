@@ -1,8 +1,9 @@
 use crate::exclusion::Exclusion;
+use digest_io::IoWrapper;
 use gtk::glib;
 use sha2::{
     Digest, Sha256,
-    digest::{OutputSizeUser, generic_array::GenericArray},
+    digest::{OutputSizeUser, array::Array},
 };
 use std::error::Error;
 use std::fs::{self, Metadata};
@@ -90,18 +91,16 @@ fn find_files_in_dirs(
     Ok(files)
 }
 
-fn get_file_hash(
-    fi: &FileInfo,
-) -> io::Result<GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>> {
-    static EMPTY_HASH: LazyLock<GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize>> =
+fn get_file_hash(fi: &FileInfo) -> io::Result<Array<u8, <Sha256 as OutputSizeUser>::OutputSize>> {
+    static EMPTY_HASH: LazyLock<Array<u8, <Sha256 as OutputSizeUser>::OutputSize>> =
         LazyLock::new(|| Sha256::new().finalize());
 
     if fi.size > 0 {
-        let mut hasher = Sha256::new();
+        let mut hasher = IoWrapper(Sha256::new());
         let file = std::fs::File::open(&fi.path)?;
         let mut reader = io::BufReader::new(file);
         io::copy(&mut reader, &mut hasher)?;
-        let digest = hasher.finalize();
+        let digest = hasher.0.finalize();
         Ok(digest)
     } else {
         Ok(*EMPTY_HASH)
