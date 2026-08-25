@@ -215,7 +215,7 @@ pub async fn notify_error(parent: &gtk::Window, message: &str) {
 
 pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str) {
     let dlg = gtk::Window::builder()
-        .title("Delete")
+        .title("Error log")
         .transient_for(parent)
         .modal(true)
         .resizable(true)
@@ -271,13 +271,14 @@ pub async fn notify_detailed(parent: &gtk::Window, message: &str, details: &str)
     let button_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(6)
-        .vexpand(true)
         .valign(gtk::Align::End)
         .build();
     container.append(&button_box);
 
     let ok_button = gtk::Button::builder()
         .label("OK")
+        .hexpand(true)
+        .halign(gtk::Align::End)
         .receives_default(true)
         .build();
     button_box.append(&ok_button);
