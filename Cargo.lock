@@ -170,7 +170,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "find_duplicates_gui"
+name = "find_duplicates"
 version = "0.1.0"
 dependencies = [
  "async-channel",
